@@ -66,7 +66,6 @@ const InterviewCoach = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [currentAnswer, setCurrentAnswer] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [questionStartTime, setQuestionStartTime] = useState(0);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -215,7 +214,6 @@ const InterviewCoach = () => {
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                 silenceTimerRef.current = setTimeout(() => {
                     stopListeningRef.current?.();
-                    // toast({ title: "Microphone stopped", description: "No speech detected." });
                 }, 5000);
             }
         } catch (e) {
@@ -260,7 +258,6 @@ const InterviewCoach = () => {
                     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                     silenceTimerRef.current = setTimeout(() => {
                         stopListeningRef.current?.(); // Just stop mic on silence
-                        toast({ description: "Microphone stopped (silence detected)." });
                     }, 2500); // Stop mic after 2.5 seconds of silence
                 };
 
@@ -295,7 +292,6 @@ const InterviewCoach = () => {
         setDisplayedQuestion('');
         setIsTyping(true);
         setCurrentAnswer('');
-        setIsAnswerSubmitted(false);
         setIsSubmitting(false);
         setQuestionStartTime(Date.now());
         
@@ -372,8 +368,14 @@ const InterviewCoach = () => {
             };
 
             setInterviewData(updatedData);
-            setIsAnswerSubmitted(true);
-            toast({ title: 'Answer Saved', description: 'Click Next Question to proceed.' });
+            
+            // Check if this was the last question
+            if (currentQuestionIndex + 1 >= interviewData.questions.length) {
+                await completeInterview(updatedData);
+            } else {
+                setCurrentQuestionIndex(prev => prev + 1);
+                toast({ title: 'Answer Submitted', description: 'Moving to next question...' });
+            }
 
         } catch (error: any) {
             console.error('Error submitting answer:', error);
@@ -384,17 +386,6 @@ const InterviewCoach = () => {
             });
         } finally {
             setIsSubmitting(false);
-        }
-    };
-
-    const handleNextQuestion = () => {
-        if (!interviewData) return;
-
-        if (currentQuestionIndex + 1 >= interviewData.questions.length) {
-            completeInterview(interviewData);
-        } else {
-            setCurrentQuestionIndex(prev => prev + 1);
-            // Reset logic handled by useEffect on currentQuestionId change
         }
     };
 
@@ -495,8 +486,7 @@ const InterviewCoach = () => {
     // Status text logic
     let statusText = "Ready";
     if (isGeneratingReport) statusText = "Generating Report...";
-    else if (isSubmitting) statusText = "Saving answer...";
-    else if (isAnswerSubmitted) statusText = "Answer saved. Ready for next.";
+    else if (isSubmitting) statusText = "Saving & advancing...";
     else if (isTyping) statusText = "Interviewer is asking...";
     else if (isAiSpeaking) statusText = "Interviewer is speaking...";
     else if (isListening) statusText = "Listening to you...";
@@ -640,10 +630,10 @@ const InterviewCoach = () => {
                         <Card className="p-6 md:p-8 bg-white border-l-4 border-l-primary shadow-sm min-h-[140px] flex flex-col justify-center transition-all duration-300">
                             <div className="flex flex-wrap gap-2 mb-4">
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100">
-                                    {currentQuestion?.category}
+                                    {currentQuestion.category}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs text-muted-foreground capitalize">
-                                    {currentQuestion?.difficulty}
+                                    {currentQuestion.difficulty}
                                 </Badge>
                             </div>
                             <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
@@ -680,10 +670,10 @@ const InterviewCoach = () => {
                                     onChange={(e) => setCurrentAnswer(e.target.value)}
                                     placeholder={inputMode === 'voice' ? "Listening... Speak your answer clearly." : "Type your answer here..."}
                                     className="h-full resize-none border-0 focus-visible:ring-0 text-lg p-6 leading-relaxed bg-transparent text-slate-800 placeholder:text-slate-300"
-                                    disabled={isSubmitting || isAnswerSubmitted}
+                                    disabled={isSubmitting}
                                 />
                                 
-                                {inputMode === 'voice' && !isAnswerSubmitted && (
+                                {inputMode === 'voice' && (
                                     <div className="absolute bottom-4 right-4">
                                         <Button
                                             size="icon"
@@ -704,29 +694,20 @@ const InterviewCoach = () => {
                                 <div className="text-xs text-muted-foreground font-medium pl-2">
                                     {currentAnswer.length} chars
                                 </div>
-                                <div className="flex gap-2">
-                                    {isAnswerSubmitted ? (
-                                        <Button 
-                                            onClick={handleNextQuestion} 
-                                            className="px-6 h-9 shadow-sm bg-green-600 hover:bg-green-700"
-                                        >
-                                            {isLastQuestion ? 'Finish Interview' : 'Next Question'} 
-                                            <ArrowRight className="ml-2 h-4 w-4" />
-                                        </Button>
+                                <Button
+                                    onClick={handleSubmitAnswer}
+                                    disabled={!currentAnswer.trim() || isSubmitting}
+                                    className="px-6 h-9 shadow-sm"
+                                >
+                                    {isSubmitting ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        <Button
-                                            onClick={handleSubmitAnswer}
-                                            disabled={!currentAnswer.trim() || isSubmitting}
-                                            className="px-6 h-9 shadow-sm"
-                                        >
-                                            {isSubmitting ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <>Submit Answer <CheckCircle2 className="ml-2 h-4 w-4" /></>
-                                            )}
-                                        </Button>
+                                        <>
+                                            {isLastQuestion ? 'Submit & Finish' : 'Submit & Next'} 
+                                            {isLastQuestion ? <CheckCircle2 className="ml-2 h-4 w-4" /> : <ArrowRight className="ml-2 h-4 w-4" />}
+                                        </>
                                     )}
-                                </div>
+                                </Button>
                             </div>
                         </Card>
                     </div>
