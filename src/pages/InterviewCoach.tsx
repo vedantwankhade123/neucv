@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
     Mic, MicOff, Square, Volume2, Loader2, Bot, Sparkles, 
-    CheckCircle2, ArrowRight, Clock, Settings, Home, Keyboard
+    CheckCircle2, ArrowRight, Clock, Settings, Home, Keyboard, SkipForward
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -531,6 +531,43 @@ const InterviewCoach = () => {
         }
     };
 
+    const handleSkip = async () => {
+        if (!interviewData || isSubmitting) return;
+        
+        stopListening();
+        stopTTS();
+        setIsSubmitting(true);
+
+        try {
+            const currentQuestion = interviewData.questions[currentQuestionIndex];
+            const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
+
+            const response: InterviewResponse = {
+                questionId: currentQuestion.id,
+                answer: "Skipped by user.",
+                timestamp: Date.now(),
+                duration: questionDuration
+            };
+
+            const updatedResponses = [...interviewData.responses, response];
+            const updatedData = { ...interviewData, responses: updatedResponses };
+
+            setInterviewData(updatedData);
+            
+            if (currentQuestionIndex + 1 >= interviewData.questions.length) {
+                await completeInterview(updatedData);
+            } else {
+                setCurrentQuestionIndex(prev => prev + 1);
+                toast.info('Question Skipped');
+            }
+
+        } catch (error: any) {
+            console.error('Error skipping question:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const completeInterview = async (finalData: InterviewData) => {
         stopListening();
         stopTTS();
@@ -545,7 +582,8 @@ const InterviewCoach = () => {
                 const response = finalData.responses[i];
                 const question = finalData.questions.find(q => q.id === response.questionId);
                 
-                if (question) {
+                // Don't evaluate skipped questions
+                if (question && response.answer !== "Skipped by user.") {
                     setAnalysisProgress(Math.round(((i) / totalResponses) * 60));
                     const evaluation = await evaluateInterviewResponse(
                         question.question,
@@ -879,20 +917,30 @@ const InterviewCoach = () => {
                                 <div className="text-xs text-slate-400 font-medium pl-1">
                                     {currentAnswer.length} chars
                                 </div>
-                                <Button
-                                    onClick={handleSubmitAnswer}
-                                    disabled={!currentAnswer.trim() || isSubmitting}
-                                    className="px-8 h-11 shadow-lg shadow-primary/20 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90"
-                                >
-                                    {isSubmitting ? (
-                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    ) : (
-                                        <>
-                                            {isLastQuestion ? 'Complete Interview' : 'Submit & Next'} 
-                                            {isLastQuestion ? <CheckCircle2 className="ml-2 h-4 w-4" /> : <ArrowRight className="ml-2 h-4 w-4" />}
-                                        </>
-                                    )}
-                                </Button>
+                                <div className="flex gap-3">
+                                    <Button 
+                                        variant="ghost" 
+                                        onClick={handleSkip}
+                                        disabled={isSubmitting}
+                                        className="text-slate-500 hover:text-slate-900 gap-2 h-11"
+                                    >
+                                        <SkipForward className="h-4 w-4" /> Skip
+                                    </Button>
+                                    <Button
+                                        onClick={handleSubmitAnswer}
+                                        disabled={!currentAnswer.trim() || isSubmitting}
+                                        className="px-8 h-11 shadow-lg shadow-primary/20 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90"
+                                    >
+                                        {isSubmitting ? (
+                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        ) : (
+                                            <>
+                                                {isLastQuestion ? 'Complete Interview' : 'Submit & Next'} 
+                                                {isLastQuestion ? <CheckCircle2 className="ml-2 h-4 w-4" /> : <ArrowRight className="ml-2 h-4 w-4" />}
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </Card>
                     </div>
