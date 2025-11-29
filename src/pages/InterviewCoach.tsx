@@ -114,6 +114,7 @@ const InterviewCoach = () => {
         if (data) {
             setInterviewData(data);
             setQuestionStartTime(Date.now());
+            
             const settings = getAutoSaveSettings();
             setIsTTSEnabled(settings.interviewTTS);
         } else {
@@ -258,7 +259,8 @@ const InterviewCoach = () => {
                     // Reset silence timer on any speech result
                     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                     silenceTimerRef.current = setTimeout(() => {
-                        stopListeningRef.current?.();
+                        stopListeningRef.current?.(); // Just stop mic on silence
+                        toast({ description: "Microphone stopped (silence detected)." });
                     }, 2500); // Stop mic after 2.5 seconds of silence
                 };
 
@@ -279,12 +281,17 @@ const InterviewCoach = () => {
         }
     }, [phase]);
 
-    // --- Typing Animation & Automatic Mic Start ---
-    useEffect(() => {
-        if (!interviewData || phase !== 'interview') return;
+    // --- Critical: Question Typing Effect ---
+    // Depend on Question ID so it only runs when question changes
+    const currentQuestion = interviewData?.questions[currentQuestionIndex];
+    const currentQuestionId = currentQuestion?.id;
 
+    useEffect(() => {
+        if (!interviewData || !currentQuestion || phase !== 'interview') return;
+
+        const questionText = currentQuestion.question;
+        
         // Reset state for new question
-        const questionText = interviewData.questions[currentQuestionIndex].question;
         setDisplayedQuestion('');
         setIsTyping(true);
         setCurrentAnswer('');
@@ -295,16 +302,15 @@ const InterviewCoach = () => {
         stopListening();
         stopTTS();
 
-        let charIndex = 0;
-        
         // Clear any existing typing timeout
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
-        const type = () => {
-            if (charIndex < questionText.length) {
-                setDisplayedQuestion(questionText.substring(0, charIndex + 1));
-                charIndex++;
-                typingTimeoutRef.current = setTimeout(type, 30);
+        let i = 0;
+        const typeChar = () => {
+            if (i < questionText.length) {
+                setDisplayedQuestion(questionText.substring(0, i + 1));
+                i++;
+                typingTimeoutRef.current = setTimeout(typeChar, 20); // Faster typing
             } else {
                 // Finished typing
                 setIsTyping(false);
@@ -312,21 +318,23 @@ const InterviewCoach = () => {
                 
                 // Auto-start mic if in voice mode
                 if (inputModeRef.current === 'voice') {
-                    // Wait a moment for TTS to potentially start or user to get ready
+                    // Wait a moment for TTS to start or finish
                     setTimeout(() => {
                         startListeningRef.current?.();
-                    }, 1500); 
+                    }, 1000); 
                 }
             }
         };
 
-        // Start typing
-        typingTimeoutRef.current = setTimeout(type, 300);
+        // Start typing with slight delay to ensure render
+        typingTimeoutRef.current = setTimeout(typeChar, 100);
 
         return () => {
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            stopTTS();
+            stopListening();
         };
-    }, [currentQuestionIndex]); // Dependency on index ONLY ensures it runs once per question
+    }, [currentQuestionId, phase]); // ONLY re-run when question ID changes
 
     const toggleListening = () => {
         if (isListening) stopListening();
@@ -365,7 +373,7 @@ const InterviewCoach = () => {
 
             setInterviewData(updatedData);
             setIsAnswerSubmitted(true);
-            toast({ title: 'Answer Saved', description: 'Click Next to proceed to the next question.' });
+            toast({ title: 'Answer Saved', description: 'Click Next Question to proceed.' });
 
         } catch (error: any) {
             console.error('Error submitting answer:', error);
@@ -386,6 +394,7 @@ const InterviewCoach = () => {
             completeInterview(interviewData);
         } else {
             setCurrentQuestionIndex(prev => prev + 1);
+            // Reset logic handled by useEffect on currentQuestionId change
         }
     };
 
@@ -454,7 +463,7 @@ const InterviewCoach = () => {
                 setElapsedTime(elapsed);
                 if (elapsed >= interviewData.setupData.duration * 60) {
                     toast({ title: 'Time Up!', description: 'Interview time limit reached.', variant: 'destructive' });
-                    // Save progress if time up
+                    // Force complete even if not all questions answered
                     if (interviewData.responses.length > 0) {
                         completeInterview(interviewData);
                     } else {
@@ -480,7 +489,6 @@ const InterviewCoach = () => {
         );
     }
 
-    const currentQuestion = interviewData!.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex) / interviewData!.questions.length) * 100;
     const isLastQuestion = currentQuestionIndex + 1 === interviewData!.questions.length;
 
@@ -488,7 +496,7 @@ const InterviewCoach = () => {
     let statusText = "Ready";
     if (isGeneratingReport) statusText = "Generating Report...";
     else if (isSubmitting) statusText = "Saving answer...";
-    else if (isAnswerSubmitted) statusText = "Answer saved. Click Next.";
+    else if (isAnswerSubmitted) statusText = "Answer saved. Ready for next.";
     else if (isTyping) statusText = "Interviewer is asking...";
     else if (isAiSpeaking) statusText = "Interviewer is speaking...";
     else if (isListening) statusText = "Listening to you...";
@@ -632,10 +640,10 @@ const InterviewCoach = () => {
                         <Card className="p-6 md:p-8 bg-white border-l-4 border-l-primary shadow-sm min-h-[140px] flex flex-col justify-center transition-all duration-300">
                             <div className="flex flex-wrap gap-2 mb-4">
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100">
-                                    {currentQuestion.category}
+                                    {currentQuestion?.category}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs text-muted-foreground capitalize">
-                                    {currentQuestion.difficulty}
+                                    {currentQuestion?.difficulty}
                                 </Badge>
                             </div>
                             <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
