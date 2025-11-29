@@ -46,7 +46,7 @@ const cleanAndParseJSON = (text: string) => {
   }
 };
 
-export const generateContent = async (prompt: string, modelName: string = 'gemini-1.5-flash') => {
+export const generateContent = async (prompt: string, modelName: string = 'gemini-1.5-flash-001') => {
   if (!API_KEY) {
     throw new Error('Gemini API key is not configured. Please add VITE_GEMINI_API_KEY to your .env file and RESTART the dev server.');
   }
@@ -57,6 +57,19 @@ export const generateContent = async (prompt: string, modelName: string = 'gemin
     const response = result.response;
     return response.text();
   } catch (error: any) {
+    // Check for 404 or not found errors and try fallback
+    if (modelName !== 'gemini-pro' && (error.message?.includes('404') || error.message?.includes('not found'))) {
+      console.warn(`Model ${modelName} not found, attempting fallback to gemini-pro`);
+      try {
+        const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-pro' });
+        const result = await fallbackModel.generateContent(prompt);
+        return result.response.text();
+      } catch (fallbackError: any) {
+        console.error('Fallback model also failed:', fallbackError);
+        throw new Error(`Failed to generate content. Primary model ${modelName} not found, and fallback failed.`);
+      }
+    }
+
     console.error('Gemini API Error Details:', {
       message: error.message,
       status: error.status,
@@ -67,22 +80,22 @@ export const generateContent = async (prompt: string, modelName: string = 'gemin
   }
 };
 
-export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName: string = 'gemini-1.5-flash') => {
+export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName: string = 'gemini-1.5-flash-001') => {
   const prompt = `Create a professional summary for a ${jobTitle}. Return ONLY the summary text, no markdown, no quotes.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateExperienceDescription = async (role: string, company: string, existingDescription: string = '', resumeContext?: any, startDate?: string, endDate?: string, modelName: string = 'gemini-1.5-flash') => {
+export const generateExperienceDescription = async (role: string, company: string, existingDescription: string = '', resumeContext?: any, startDate?: string, endDate?: string, modelName: string = 'gemini-1.5-flash-001') => {
   const prompt = `Generate professional bullet points for the role of ${role} at ${company}. Return ONLY the bullet points, starting with action verbs. Do not include introductory text.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateSkills = async (jobTitle: string, modelName: string = 'gemini-1.5-flash'): Promise<string> => {
+export const generateSkills = async (jobTitle: string, modelName: string = 'gemini-1.5-flash-001'): Promise<string> => {
   const prompt = `List top technical and soft skills for a ${jobTitle}. Return a simple comma-separated list.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateContextAwareSkills = async (resumeData: any, count: number = 6, modelName: string = 'gemini-1.5-flash') => {
+export const generateContextAwareSkills = async (resumeData: any, count: number = 6, modelName: string = 'gemini-1.5-flash-001') => {
   const prompt = `Based on the following resume data, generate ${count} relevant skills. Return ONLY a comma-separated list.
   
   Resume Data:
@@ -91,12 +104,12 @@ export const generateContextAwareSkills = async (resumeData: any, count: number 
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateEducationDescription = async (degree: string, institution: string, keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash') => {
+export const generateEducationDescription = async (degree: string, institution: string, keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash-001') => {
   const prompt = `Generate a brief description for an education entry: ${degree} at ${institution}. Include key achievements or coursework if implied. Return ONLY the text.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateCustomSectionContent = async (sectionTitle: string, sectionType: 'text' | 'list' | 'experience', keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash') => {
+export const generateCustomSectionContent = async (sectionTitle: string, sectionType: 'text' | 'list' | 'experience', keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash-001') => {
   const prompt = `Generate content for a resume section titled "${sectionTitle}". The format is ${sectionType}. 
   Keywords/Context: ${keywords}
   Return ONLY the content text/bullet points suitable for a resume.`;
@@ -122,7 +135,7 @@ export const processResumeAgentPrompt = async (
   userPrompt: string,
   currentResumeData: any,
   conversationHistory: any[] = [],
-  modelName: string = 'gemini-1.5-flash'
+  modelName: string = 'gemini-1.5-flash-001'
 ): Promise<ResumeAgentResponse> => {
   const historyText = conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n');
 
@@ -184,7 +197,7 @@ export const generateInterviewQuestions = async (
   jobRole: string,
   numQuestions: number,
   language: string,
-  modelName: string = 'gemini-1.5-flash'
+  modelName: string = 'gemini-1.5-flash-001'
 ) => {
   const languageInstructions = {
     english: 'Generate questions in English.',
@@ -223,7 +236,7 @@ export const evaluateInterviewResponse = async (
   question: string,
   response: string,
   language: string,
-  modelName: string = 'gemini-1.5-flash'
+  modelName: string = 'gemini-1.5-flash-001'
 ) => {
   const prompt = `Evaluate this interview response.
   
@@ -250,7 +263,7 @@ Return ONLY a JSON object:
 
 export const generateInterviewReport = async (
   interviewData: any,
-  modelName: string = 'gemini-1.5-flash'
+  modelName: string = 'gemini-1.5-flash-001'
 ) => {
   const { setupData, questions, responses } = interviewData;
 
