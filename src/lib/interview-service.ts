@@ -4,46 +4,81 @@ import { db } from './firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { createWorker } from 'tesseract.js';
 
-// Configure PDF.js worker for Vite
-// Use local worker file from public folder to avoid CORS issues
+// Configure PDF.js worker using a reliable CDN
 if (typeof window !== 'undefined') {
-    // Use the worker file from public folder (copied from node_modules)
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+    // Use specific version matching package.json to avoid version mismatch errors
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
+}
+
+/**
+ * Render a PDF page to an image URL for OCR
+ */
+async function pdfPageToImage(page: any): Promise<string> {
+    const viewport = page.getViewport({ scale: 1.5 }); // Reasonable scale for OCR
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    if (!context) throw new Error('Canvas context not available');
+
+    await page.render({ canvasContext: context, viewport: viewport }).promise;
+    return canvas.toDataURL('image/png');
 }
 
 /**
  * Parse resume PDF and extract text content
+ * Includes fallback to OCR for scanned PDFs
  */
 export async function parseResumePDF(file: File): Promise<string> {
     try {
         console.log('Starting PDF extraction for file:', file.name);
         const arrayBuffer = await file.arrayBuffer();
-        console.log('ArrayBuffer created, size:', arrayBuffer.byteLength);
-
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        console.log('PDF loaded successfully, pages:', pdf.numPages);
-
+        
         let fullText = '';
+        let isScanned = true;
 
-        // Extract text from all pages
-        for (let i = 1; i <= pdf.numPages; i++) {
+        // Try standard text extraction first
+        for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) { // Limit to first 3 pages
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
+            
+            // Check if page has actual text items
+            if (textContent.items.length > 0) {
+                isScanned = false;
+            }
+
             const pageText = textContent.items
                 .map((item: any) => item.str)
                 .join(' ');
-            fullText += pageText + '\n';
-            console.log(`Page ${i} extracted, length: ${pageText.length}`);
+            
+            if (pageText.trim().length > 0) {
+                fullText += pageText + '\n';
+            }
         }
 
-        console.log('Total text extracted, length:', fullText.length);
+        // If text is very short or empty, it might be a scanned PDF or image-only PDF
+        if (isScanned || fullText.trim().length < 50) {
+            console.log('PDF appears to be scanned or image-based. Attempting OCR...');
+            
+            // Process first page only for efficiency
+            const page = await pdf.getPage(1);
+            const imageUrl = await pdfPageToImage(page);
+            
+            const worker = await createWorker('eng');
+            const ret = await worker.recognize(imageUrl);
+            await worker.terminate();
+            
+            console.log('OCR Fallback complete, text length:', ret.data.text.length);
+            fullText = ret.data.text;
+        }
+
+        console.log('Total text extracted:', fullText.length);
         return fullText.trim();
     } catch (error) {
         console.error('PDF parsing error details:', error);
-        if (error instanceof Error) {
-            throw new Error(`Failed to parse resume PDF: ${error.message}`);
-        }
-        throw new Error('Failed to parse resume PDF. The file may be corrupted or password-protected.');
+        throw new Error('Failed to parse resume PDF. Please try uploading an image format instead.');
     }
 }
 
@@ -53,17 +88,21 @@ export async function parseResumePDF(file: File): Promise<string> {
 export async function parseResumeImage(file: File): Promise<string> {
     try {
         console.log('Starting Image OCR for file:', file.name);
+        
+        // Create a URL for the file to ensure Tesseract can read it properly
+        const imageUrl = URL.createObjectURL(file);
+        
         const worker = await createWorker('eng');
-        const ret = await worker.recognize(file);
+        const ret = await worker.recognize(imageUrl);
         await worker.terminate();
+        
+        // Clean up
+        URL.revokeObjectURL(imageUrl);
         
         console.log('OCR complete, text length:', ret.data.text.length);
         return ret.data.text.trim();
     } catch (error) {
         console.error('Image parsing error details:', error);
-        if (error instanceof Error) {
-            throw new Error(`Failed to parse resume image: ${error.message}`);
-        }
         throw new Error('Failed to parse resume image.');
     }
 }
