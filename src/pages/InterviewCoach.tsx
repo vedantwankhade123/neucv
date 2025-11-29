@@ -815,9 +815,9 @@ const InterviewCoach = () => {
                     <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[400px]">
                         
                         {/* Question Card */}
-                        <Card className="p-6 md:p-8 bg-white border-0 shadow-lg shadow-slate-200/40 rounded-3xl flex flex-col justify-center min-h-[200px] relative overflow-hidden transition-all group hover:shadow-xl hover:shadow-slate-200/50">
+                        <Card className="p-6 md:p-8 bg-white border-0 shadow-lg shadow-slate-200/40 rounded-3xl flex flex-col h-[280px] shrink-0 relative overflow-hidden transition-all group hover:shadow-xl hover:shadow-slate-200/50">
                             <div className="absolute top-0 left-0 w-1.5 h-full bg-primary transition-all group-hover:w-2" />
-                            <div className="flex flex-wrap gap-2 mb-4">
+                            <div className="flex flex-wrap gap-2 mb-4 shrink-0">
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 px-2.5 py-0.5 text-xs font-medium">
                                     {currentQuestion?.category}
                                 </Badge>
@@ -825,10 +825,12 @@ const InterviewCoach = () => {
                                     {currentQuestion?.difficulty}
                                 </Badge>
                             </div>
-                            <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
-                                {displayedQuestion}
-                                {isTyping && <span className="inline-block w-2 h-5 ml-1 bg-primary align-middle animate-pulse rounded-full" />}
-                            </h2>
+                            <div className="flex-grow overflow-y-auto hide-scrollbar flex flex-col justify-center">
+                                <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
+                                    {displayedQuestion}
+                                    {isTyping && <span className="inline-block w-2 h-5 ml-1 bg-primary align-middle animate-pulse rounded-full" />}
+                                </h2>
+                            </div>
                         </Card>
 
                         {/* Answer Input Area */}
