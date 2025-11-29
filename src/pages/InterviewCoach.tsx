@@ -492,7 +492,6 @@ const InterviewCoach = () => {
         );
     }
 
-    const currentQuestion = interviewData!.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex) / interviewData!.questions.length) * 100;
     const isLastQuestion = currentQuestionIndex + 1 === interviewData!.questions.length;
 
