@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { InterviewReport } from '@/components/InterviewReport';
 import { InterviewData, InterviewResponse } from '@/types/interview';
 import { evaluateInterviewResponse, generateInterviewReport } from '@/lib/gemini';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from "sonner";
 import { Badge } from '@/components/ui/badge';
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
@@ -29,7 +29,6 @@ type InputMode = 'voice' | 'text';
 const InterviewCoach = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { toast } = useToast();
     
     // Refs
     const timerIntervalRef = useRef<number | null>(null);
@@ -143,7 +142,6 @@ const InterviewCoach = () => {
         ctx.globalCompositeOperation = 'screen'; // Additive blending for the "light" look
 
         // Draw Filaments
-        // The reference has many fine lines creating a density
         const particles = 720; // High count for density
         const angleStep = (Math.PI * 2) / particles;
 
@@ -151,63 +149,38 @@ const InterviewCoach = () => {
             const angle = i * angleStep;
             
             // Map angle to frequency data (mirrored for symmetry)
-            // We use a section of the frequency data to drive the "spikes"
             const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
             const freqValue = frequencyData[freqIndex] || 0;
             
-            // Determine Color based on Angle (matching reference image)
-            // Left/Top: Green/Teal. Right/Bottom: Purple/Blue.
-            // We'll use HSL for smooth transitions
-            // Green is ~140, Blue ~220, Purple ~270
-            
-            // Normalize angle to 0-1 range for color mapping
+            // Determine Color based on Angle
             const normAngle = (angle / (Math.PI * 2)); 
-            
             let hue;
             let saturation = 80;
             let lightness = 50;
 
-            // Create a complex color gradient map
-            // Visualizer reference seems to have:
-            // Top-Left (Greenish) -> Bottom-Right (Purple/Blue)
-            
-            // Shift angle so gradient aligns nicely
             const shiftedAngle = (normAngle + 0.2) % 1.0; 
 
             if (shiftedAngle < 0.5) {
-                // Transition from Purple(280) to Green(140)
-                // This creates the distinctive split look
                 hue = 280 - (shiftedAngle * 2) * 140; 
             } else {
-                // Transition from Green(140) back to Purple(280)
                 hue = 140 + ((shiftedAngle - 0.5) * 2) * 140;
             }
 
-            // Boost brightness on active parts
             lightness += (freqValue / 255) * 30;
-            const alpha = 0.1 + (freqValue / 255) * 0.5; // Transparent lines
+            const alpha = 0.1 + (freqValue / 255) * 0.5;
 
             ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
             ctx.lineWidth = 1;
 
-            // Filament Geometry
-            // Start at base radius, curve outwards
-            // The waviness depends on audio
-            
             const rStart = baseRadius;
-            // Add noise/variation to length
             const rEnd = baseRadius + 20 + (freqValue / 255) * 60; 
-            
-            // Swirl effect: End point is rotated relative to start point
             const swirl = 0.1 + (freqValue / 255) * 0.1;
             
             const x1 = Math.cos(angle) * rStart;
             const y1 = Math.sin(angle) * rStart;
-            
             const x2 = Math.cos(angle + swirl) * rEnd;
             const y2 = Math.sin(angle + swirl) * rEnd;
 
-            // Control point for curve
             const cpX = Math.cos(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
             const cpY = Math.sin(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
 
@@ -217,11 +190,10 @@ const InterviewCoach = () => {
             ctx.stroke();
         }
 
-        // Inner rim light (The bright white/blue edge of the void)
+        // Inner rim light
         ctx.beginPath();
         ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
         ctx.lineWidth = 1.5;
-        // Subtle gradient stroke for the rim
         const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
         rimGradient.addColorStop(0, 'rgba(74, 222, 128, 0.5)'); // Greenish
         rimGradient.addColorStop(1, 'rgba(167, 139, 250, 0.5)'); // Purplish
@@ -424,7 +396,7 @@ const InterviewCoach = () => {
                     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                     silenceTimerRef.current = setTimeout(() => {
                         stopListeningRef.current?.();
-                        toast({ description: "Microphone stopped (silence detected)." });
+                        toast.info("Microphone stopped", { description: "Silence detected." });
                     }, 2500);
                 };
 
@@ -527,15 +499,13 @@ const InterviewCoach = () => {
                 await completeInterview(updatedData);
             } else {
                 setCurrentQuestionIndex(prev => prev + 1);
-                toast({ title: 'Answer Submitted', description: 'Moving to next question...' });
+                toast.success('Answer Submitted', { description: 'Moving to next question...' });
             }
 
         } catch (error: any) {
             console.error('Error submitting answer:', error);
-            toast({
-                title: 'Submission Failed',
-                description: error.message || 'Please try again.',
-                variant: 'destructive'
+            toast.error('Submission Failed', {
+                description: error.message || 'Please try again.'
             });
         } finally {
             setIsSubmitting(false);
@@ -585,10 +555,8 @@ const InterviewCoach = () => {
             setPhase('report');
         } catch (error) {
             console.error('Report generation failed:', error);
-            toast({
-                title: "Report Generation Failed",
-                description: "Could not generate full analysis. Showing transcript only.",
-                variant: "destructive"
+            toast.error("Report Generation Failed", {
+                description: "Could not generate full analysis. Showing transcript only."
             });
             
             // Create minimal fallback report to prevent crashes
@@ -630,7 +598,7 @@ const InterviewCoach = () => {
                 // Check if time limit reached
                 const totalDurationSeconds = interviewData.setupData.duration * 60;
                 if (elapsed >= totalDurationSeconds) {
-                    toast({ title: 'Time Up!', description: 'Interview time limit reached.', variant: 'destructive' });
+                    toast.warning('Time Up!', { description: 'Interview time limit reached.' });
                     if (interviewData.responses.length > 0) {
                         completeInterview(interviewData);
                     } else {
@@ -866,32 +834,23 @@ const InterviewCoach = () => {
                                 
                                 {inputMode === 'voice' && (
                                     <div className="absolute bottom-6 right-6">
-                                        {/* Enhanced Mic Animation */}
-                                        <div className="relative">
-                                            {isListening && (
-                                                <>
-                                                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
-                                                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-20 animate-[pulse_2s_infinite] scale-125"></span>
-                                                </>
+                                        <Button
+                                            size="icon"
+                                            variant={isListening ? "destructive" : "default"}
+                                            className={cn(
+                                                "relative rounded-full h-14 w-14 shadow-xl transition-all duration-500 border border-slate-100",
+                                                isListening 
+                                                    ? "bg-red-500 hover:bg-red-600 text-white shadow-red-500/30 ring-4 ring-red-500/20" 
+                                                    : "bg-slate-900 hover:bg-slate-800 text-white"
                                             )}
-                                            <Button
-                                                size="icon"
-                                                variant={isListening ? "destructive" : "default"}
-                                                className={cn(
-                                                    "relative rounded-full h-16 w-16 shadow-2xl transition-all duration-300 border-4 border-white",
-                                                    isListening 
-                                                        ? "bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50" 
-                                                        : "bg-slate-900 hover:bg-slate-800 hover:scale-105"
-                                                )}
-                                                onClick={toggleListening}
-                                            >
-                                                {isListening ? (
-                                                    <MicOff className="h-7 w-7 text-white" />
-                                                ) : (
-                                                    <Mic className="h-7 w-7 text-white" />
-                                                )}
-                                            </Button>
-                                        </div>
+                                            onClick={toggleListening}
+                                        >
+                                            {isListening ? (
+                                                <MicOff className="h-6 w-6" />
+                                            ) : (
+                                                <Mic className="h-6 w-6" />
+                                            )}
+                                        </Button>
                                     </div>
                                 )}
                             </div>
