@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
-    Mic, MicOff, Square, Volume2, Loader2, 
+    Mic, MicOff, Square, Volume2, Loader2, ChevronRight, 
     Home, Settings, Keyboard, Bot, Sparkles, 
     CheckCircle2, ArrowRight, Clock
 } from 'lucide-react';
@@ -37,8 +37,6 @@ const InterviewCoach = () => {
     const recognitionRef = useRef<any>(null);
     const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    
-    // Audio Context Refs
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const dataArrayRef = useRef<Uint8Array | null>(null);
@@ -61,7 +59,8 @@ const InterviewCoach = () => {
     // Status
     const [isListening, setIsListening] = useState(false);
     const [isAiSpeaking, setIsAiSpeaking] = useState(false);
-    
+    const [audioLevel, setAudioLevel] = useState(0);
+
     // Interview flow
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [displayedQuestion, setDisplayedQuestion] = useState('');
@@ -102,22 +101,25 @@ const InterviewCoach = () => {
 
         // Styling
         const barWidth = 4;
-        const gap = 2;
-        const barCount = 40; // Number of bars to draw
-        const maxBarHeight = height * 0.4;
+        const gap = 3;
+        const barCount = 45; // Increased bar count for wider visualization
+        const maxBarHeight = height * 0.5;
 
         // Colors
         let gradient = ctx.createLinearGradient(0, centerY - maxBarHeight, 0, centerY + maxBarHeight);
         
         if (isListening) {
-            gradient.addColorStop(0, '#4ade80'); // Green for user
-            gradient.addColorStop(1, '#22c55e');
+            gradient.addColorStop(0, '#86efac'); // Light green
+            gradient.addColorStop(0.5, '#22c55e'); // Green
+            gradient.addColorStop(1, '#86efac');
         } else if (isAiSpeaking) {
-            gradient.addColorStop(0, '#67e8f9'); // Cyan for AI
-            gradient.addColorStop(1, '#06b6d4');
+            gradient.addColorStop(0, '#67e8f9'); // Cyan
+            gradient.addColorStop(0.5, '#06b6d4'); // Darker Cyan
+            gradient.addColorStop(1, '#67e8f9');
         } else {
-            gradient.addColorStop(0, '#94a3b8'); // Gray for idle
-            gradient.addColorStop(1, '#64748b');
+            gradient.addColorStop(0, '#cbd5e1'); // Slate 300
+            gradient.addColorStop(0.5, '#64748b'); // Slate 500
+            gradient.addColorStop(1, '#cbd5e1');
         }
 
         ctx.fillStyle = gradient;
@@ -146,15 +148,17 @@ const InterviewCoach = () => {
                 // Gaussian window to taper edges
                 const window = Math.exp(-0.02 * offset * offset);
                 // Combine sine waves
-                const value = (Math.sin(time + i * 0.5) + Math.sin(time * 2 + i * 0.2)) * 50 + 80;
+                const value = (Math.sin(time + i * 0.5) + Math.sin(time * 2 + i * 0.2)) * 60 + 80;
                 frequencyData[i] = value * window;
             }
         } else {
             // Idle gentle breathing
-            const time = Date.now() / 1000;
+            const time = Date.now() / 1500;
             for (let i = 0; i < barCount; i++) {
-                const value = Math.sin(time + i * 0.2) * 5 + 10;
-                frequencyData[i] = value;
+                // Gentle undulation
+                const offset = Math.abs(i - barCount / 2);
+                const value = Math.sin(time + i * 0.1) * 5 + 10 + (20 - offset * 0.5);
+                frequencyData[i] = Math.max(4, value);
             }
         }
 
@@ -173,7 +177,7 @@ const InterviewCoach = () => {
 
             // Rounded bars
             ctx.beginPath();
-            ctx.roundRect(x, y, barWidth, h, 2);
+            ctx.roundRect(x, y, barWidth, h, 20); // Full round radius
             ctx.fill();
         }
 
@@ -189,9 +193,11 @@ const InterviewCoach = () => {
 
     // --- Audio Logic ---
 
-    const stopAudioContext = useCallback(() => {
-        // Don't close context, just suspend if needed, but typically we keep it alive
-        // Just clearing animation frame is done in drawVisualizer cleanup
+    const stopAudioAnalysis = useCallback(() => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+        setAudioLevel(0);
     }, []);
 
     const stopTTS = useCallback(() => {
@@ -209,8 +215,8 @@ const InterviewCoach = () => {
             clearTimeout(silenceTimerRef.current);
         }
         setIsListening(false);
-        // Note: We don't stop drawVisualizer here, it adapts to state
-    }, []);
+        stopAudioAnalysis();
+    }, [stopAudioAnalysis]);
 
     // Update function refs
     useEffect(() => {
@@ -231,14 +237,14 @@ const InterviewCoach = () => {
         }
         
         return () => {
-            stopAudioContext();
+            stopAudioAnalysis();
             stopTTS();
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
             if (recognitionRef.current) recognitionRef.current.stop();
         };
-    }, [location.state, navigate, stopAudioContext, stopTTS]);
+    }, [location.state, navigate, stopAudioAnalysis, stopTTS]);
 
     const handleSettingChange = (key: string, value: boolean) => {
         if (key === 'tts') {
@@ -248,29 +254,43 @@ const InterviewCoach = () => {
         }
     };
 
-    const initAudioContext = async () => {
-        if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        }
-        if (audioContextRef.current.state === 'suspended') {
-            await audioContextRef.current.resume();
-        }
-        
-        // Only get stream if we don't have it or it ended
-        if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
-            try {
-                mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const source = audioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
-                analyserRef.current = audioContextRef.current.createAnalyser();
-                analyserRef.current.fftSize = 128; // Smaller FFT size for smoother visualization bars
-                analyserRef.current.smoothingTimeConstant = 0.8;
-                source.connect(analyserRef.current);
-                
-                const bufferLength = analyserRef.current.frequencyBinCount;
-                dataArrayRef.current = new Uint8Array(bufferLength);
-            } catch (err) {
-                console.error("Mic access denied or error:", err);
+    const startAudioAnalysis = async () => {
+        try {
+            if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             }
+            if (!mediaStreamRef.current) {
+                mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+            if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume();
+            }
+
+            const source = audioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
+            analyserRef.current = audioContextRef.current.createAnalyser();
+            analyserRef.current.fftSize = 256;
+            source.connect(analyserRef.current);
+            
+            const bufferLength = analyserRef.current.frequencyBinCount;
+            dataArrayRef.current = new Uint8Array(bufferLength);
+
+            const updateVolume = () => {
+                if (!analyserRef.current || !dataArrayRef.current) return;
+                analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+                
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArrayRef.current[i];
+                }
+                const average = sum / bufferLength;
+                const level = Math.min(100, Math.round(average * 2)); 
+                setAudioLevel(level);
+                
+                animationFrameRef.current = requestAnimationFrame(updateVolume);
+            };
+            updateVolume();
+        } catch (error) {
+            console.error("Error starting audio analysis:", error);
         }
     };
 
@@ -283,13 +303,11 @@ const InterviewCoach = () => {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         
-        // Try to select a better voice
         const voices = window.speechSynthesis.getVoices();
         const preferredVoice = voices.find(v => 
             v.name.includes('Google US English') || 
             v.name.includes('Samantha') ||
-            v.name.includes('Neural') ||
-            v.lang === 'en-US'
+            v.name.includes('Neural')
         ) || voices[0];
         
         if (preferredVoice) utterance.voice = preferredVoice;
@@ -310,14 +328,13 @@ const InterviewCoach = () => {
         window.speechSynthesis.speak(utterance);
     }, [isTTSEnabled]);
 
-    const startListening = useCallback(async () => {
+    const startListening = useCallback(() => {
         try {
-            await initAudioContext(); // Ensure audio context is ready for visualizer
-
             if (recognitionRef.current && !isListening) {
                 stopTTS();
                 recognitionRef.current.start();
                 setIsListening(true);
+                startAudioAnalysis();
                 
                 // Initial silence timeout (if user says nothing for 5s)
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -326,7 +343,7 @@ const InterviewCoach = () => {
                 }, 5000);
             }
         } catch (e) {
-            console.log("Mic already active or error");
+            console.log("Mic already active");
         }
     }, [isListening, stopTTS]);
 
@@ -347,6 +364,7 @@ const InterviewCoach = () => {
 
                 recognition.onstart = () => {
                     setIsListening(true);
+                    startAudioAnalysis();
                 };
 
                 recognition.onresult = (event: any) => {
@@ -373,11 +391,13 @@ const InterviewCoach = () => {
                 recognition.onerror = (event: any) => {
                     if (event.error !== 'no-speech') {
                         setIsListening(false);
+                        stopAudioAnalysis();
                     }
                 };
 
                 recognition.onend = () => {
                     setIsListening(false);
+                    stopAudioAnalysis();
                 };
 
                 recognitionRef.current = recognition;
@@ -603,98 +623,115 @@ const InterviewCoach = () => {
     return (
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
-            <header className="h-16 border-b px-6 flex items-center justify-between bg-white z-20 shadow-sm">
+            <header className="h-16 border-b px-4 lg:px-6 flex items-center justify-between bg-white z-20 shadow-sm relative">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard">
+                    <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard" className="hover:bg-slate-100">
                         <Home className="h-5 w-5 text-slate-500" />
                     </Button>
-                    <div className="w-px h-8 bg-slate-200"></div>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                            <Bot className="h-6 w-6 text-primary" />
+                    <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/10">
+                            <Bot className="h-5 w-5 text-primary" />
                         </div>
-                        <div>
-                            <h1 className="text-base font-bold text-slate-900 leading-none">AI Interview Coach</h1>
-                            <p className="text-xs text-muted-foreground font-medium mt-1">{interviewData!.setupData.jobRole}</p>
+                        <div className="hidden sm:block">
+                            <h1 className="text-sm font-bold text-slate-900 leading-none">AI Coach</h1>
+                            <p className="text-[10px] text-muted-foreground font-medium mt-0.5 max-w-[150px] truncate">
+                                {interviewData!.setupData.jobRole}
+                            </p>
                         </div>
                     </div>
                 </div>
                 
-                {/* Timer Display */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200">
-                    <Clock className="h-4 w-4 text-slate-500" />
-                    <span className="text-sm font-mono font-medium text-slate-700">
+                {/* Timer Display - Centered */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-1.5 rounded-full border border-slate-200 shadow-sm hover:border-primary/20 transition-colors">
+                    <Clock className="h-4 w-4 text-primary/70 animate-[pulse_3s_infinite]" />
+                    <span className="text-sm font-mono font-semibold text-slate-700 min-w-[3rem] text-center">
                         {formatTime(elapsedTime)}
                     </span>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3">
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-slate-500">
+                            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900">
                                 <Settings className="h-5 w-5" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-72 p-4 mr-4">
-                            <h4 className="font-medium mb-3 text-sm">Session Settings</h4>
+                        <PopoverContent className="w-72 p-4 mr-4 shadow-xl border-slate-200">
+                            <h4 className="font-semibold mb-4 text-sm flex items-center gap-2">
+                                <Settings className="h-4 w-4 text-primary" /> Session Settings
+                            </h4>
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="tts" className="text-sm">AI Voice (Text-to-Speech)</Label>
+                                <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                                    <Label htmlFor="tts" className="text-sm cursor-pointer font-medium">AI Voice</Label>
                                     <Switch id="tts" checked={isTTSEnabled} onCheckedChange={(v) => handleSettingChange('tts', v)} />
                                 </div>
                             </div>
                         </PopoverContent>
                     </Popover>
-                    <Button variant="destructive" size="sm" onClick={() => completeInterview(interviewData!)} className="h-9 px-4 text-xs gap-2 shadow-sm hover:shadow">
-                        <Square className="h-3 w-3 fill-current" /> End Session
+                    <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        onClick={() => completeInterview(interviewData!)} 
+                        className="h-9 px-3 sm:px-4 text-xs gap-2 shadow-sm hover:shadow transition-all"
+                    >
+                        <Square className="h-3 w-3 fill-current" /> 
+                        <span className="hidden sm:inline">Finish</span>
                     </Button>
                 </div>
             </header>
 
             {/* Main Workspace */}
-            <main className="flex-grow p-4 md:p-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
-                <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-8 h-[650px]">
+            <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto bg-slate-50/50 flex flex-col items-center">
+                <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-6 lg:gap-8 h-full max-h-[700px] min-h-[500px]">
                     
-                    {/* Left: Modern AI Visualizer */}
-                    <div className="w-full lg:w-5/12 flex flex-col gap-6 h-full">
-                        <Card className="flex-grow bg-slate-950 rounded-3xl border-0 shadow-2xl relative flex flex-col items-center justify-center p-8 overflow-hidden group">
+                    {/* Left: AI Avatar & Visualization */}
+                    <div className="w-full lg:w-5/12 flex flex-col gap-4 h-full">
+                        <Card className="flex-grow bg-gradient-to-b from-slate-900 to-slate-950 rounded-3xl border-0 shadow-2xl relative flex flex-col items-center justify-center p-8 overflow-hidden group">
                             {/* Header Status */}
                             <div className="absolute top-6 left-0 right-0 flex justify-center z-20">
-                                <Badge variant="outline" className="bg-white/10 text-white border-white/20 backdrop-blur-sm px-4 py-1.5 text-xs uppercase tracking-wider">
+                                <Badge variant="outline" className={cn(
+                                    "backdrop-blur-md px-4 py-1.5 text-xs uppercase tracking-wider font-semibold border-white/10 transition-all duration-300",
+                                    isListening ? "bg-green-500/20 text-green-300 border-green-500/30" : 
+                                    isAiSpeaking ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" :
+                                    "bg-white/10 text-slate-300"
+                                )}>
                                     {isAiSpeaking ? 'AI Speaking' : isListening ? 'Listening' : 'Ready'}
                                 </Badge>
                             </div>
 
-                            {/* Canvas Visualizer */}
-                            <div className="relative w-full h-48 flex items-center justify-center z-10">
+                            {/* Canvas Visualizer - Centered */}
+                            <div className="relative w-full flex-grow flex items-center justify-center z-10 py-10">
                                 <canvas 
                                     ref={canvasRef} 
                                     width={400} 
                                     height={200}
-                                    className="w-full h-full object-contain opacity-90"
+                                    className="w-full h-full object-contain opacity-90 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
                                 />
                             </div>
 
                             {/* Status Text & Hints */}
-                            <div className="mt-8 text-center space-y-3 z-10 max-w-xs">
-                                <h3 className="text-white font-semibold text-xl tracking-tight transition-all">
+                            <div className="text-center space-y-2 z-10 max-w-xs mt-auto">
+                                <h3 className="text-white font-medium text-lg tracking-wide transition-all min-h-[1.75rem]">
                                     {statusText}
                                 </h3>
-                                <p className="text-slate-400 text-sm h-10 leading-relaxed line-clamp-2">
-                                    {inputMode === 'voice' && isListening ? "I'm listening to your answer..." : ""}
-                                    {isAiSpeaking ? "Listen carefully to the question." : ""}
+                                <p className="text-slate-400 text-sm min-h-[1.25rem] opacity-80">
+                                    {inputMode === 'voice' && isListening ? "Speak naturally and clearly" : ""}
                                 </p>
                             </div>
 
-                            {/* Background decoration */}
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-800/30 to-slate-950 pointer-events-none" />
-                            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950 to-transparent opacity-80" />
+                            {/* Subtle Grid Background */}
+                            <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.03] pointer-events-none" />
+                            
+                            {/* Radial Glow */}
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-800/30 via-transparent to-transparent pointer-events-none" />
                         </Card>
 
                         {/* Coach Tip */}
-                        <Card className="p-5 bg-white border-slate-200 shadow-sm flex-grow h-fit rounded-2xl">
-                            <div className="flex gap-4 items-start">
-                                <div className="bg-blue-50 p-2.5 rounded-xl h-fit text-blue-600 shrink-0">
+                        <Card className="p-5 bg-white border-slate-200/60 shadow-sm flex-grow h-fit rounded-2xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+                            <div className="flex gap-4 items-start relative z-10">
+                                <div className="bg-blue-50 p-2.5 rounded-xl h-fit text-blue-600 shrink-0 border border-blue-100 shadow-sm">
                                     <Sparkles className="h-5 w-5" />
                                 </div>
                                 <div>
@@ -711,33 +748,33 @@ const InterviewCoach = () => {
                     <div className="w-full lg:w-7/12 flex flex-col gap-6 h-full min-h-[500px]">
                         {/* Progress */}
                         <div className="flex items-center gap-4 px-1">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                                Question {currentQuestionIndex + 1} of {interviewData!.questions.length}
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                                Question {currentQuestionIndex + 1} / {interviewData!.questions.length}
                             </span>
-                            <Progress value={progress} className="h-2 flex-grow bg-slate-200" indicatorClassName="bg-primary" />
-                            <span className="text-xs font-mono text-slate-400">{Math.round(progress)}%</span>
+                            <Progress value={progress} className="h-2 flex-grow bg-slate-200" indicatorClassName="bg-primary transition-all duration-500" />
+                            <span className="text-xs font-mono font-medium text-slate-500">{Math.round(progress)}%</span>
                         </div>
 
                         {/* Question Card */}
-                        <Card className="p-8 bg-white border-none shadow-lg shadow-slate-200/50 rounded-2xl flex flex-col justify-center min-h-[160px] relative overflow-hidden transition-all">
-                            <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
-                            <div className="flex flex-wrap gap-2 mb-4">
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 px-3 py-1">
-                                    {currentQuestion.category}
+                        <Card className="p-8 bg-white border-0 shadow-lg shadow-slate-200/40 rounded-3xl flex flex-col justify-center min-h-[180px] relative overflow-hidden transition-all group hover:shadow-xl hover:shadow-slate-200/50">
+                            <div className="absolute top-0 left-0 w-1.5 h-full bg-primary transition-all group-hover:w-2" />
+                            <div className="flex flex-wrap gap-2 mb-5">
+                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 px-3 py-1 text-xs font-medium">
+                                    {currentQuestion?.category}
                                 </Badge>
-                                <Badge variant="outline" className="text-xs text-slate-500 capitalize px-3 py-1">
-                                    {currentQuestion.difficulty}
+                                <Badge variant="outline" className="text-xs text-slate-500 capitalize px-3 py-1 bg-slate-50 border-slate-200">
+                                    {currentQuestion?.difficulty}
                                 </Badge>
                             </div>
                             <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
                                 {displayedQuestion}
-                                {isTyping && <span className="inline-block w-2 h-6 ml-1.5 bg-primary align-middle animate-pulse rounded-full" />}
+                                {isTyping && <span className="inline-block w-2.5 h-6 ml-1.5 bg-primary align-middle animate-pulse rounded-full" />}
                             </h2>
                         </Card>
 
                         {/* Answer Input Area */}
                         <Card className={cn(
-                            "flex-grow flex flex-col shadow-lg shadow-slate-200/50 border-0 rounded-2xl relative overflow-hidden bg-white transition-all duration-300 ring-1 ring-slate-200",
+                            "flex-grow flex flex-col shadow-lg shadow-slate-200/40 border-0 rounded-3xl relative overflow-hidden bg-white transition-all duration-300 ring-1 ring-slate-200",
                             isListening ? "ring-2 ring-green-500/50 shadow-green-100" : "focus-within:ring-2 focus-within:ring-primary/20"
                         )}>
                             <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 backdrop-blur-sm">
@@ -751,7 +788,7 @@ const InterviewCoach = () => {
                                     variant="ghost"
                                     size="sm"
                                     onClick={toggleInputMode}
-                                    className="h-7 text-xs font-medium text-slate-500 hover:text-primary hover:bg-white"
+                                    className="h-7 text-xs font-medium text-slate-500 hover:text-primary hover:bg-white px-3"
                                 >
                                     Switch to {inputMode === 'voice' ? 'Text' : 'Voice'}
                                 </Button>
@@ -773,7 +810,7 @@ const InterviewCoach = () => {
                                             variant={isListening ? "destructive" : "default"}
                                             className={cn(
                                                 "rounded-full h-14 w-14 shadow-xl transition-all duration-300",
-                                                isListening ? "animate-pulse ring-4 ring-red-100 scale-110" : "hover:scale-105 bg-slate-900 hover:bg-slate-800"
+                                                isListening ? "animate-pulse ring-4 ring-red-100 scale-110 bg-red-500 hover:bg-red-600" : "hover:scale-105 bg-slate-900 hover:bg-slate-800"
                                             )}
                                             onClick={toggleListening}
                                         >
@@ -790,7 +827,7 @@ const InterviewCoach = () => {
                                 <Button
                                     onClick={handleSubmitAnswer}
                                     disabled={!currentAnswer.trim() || isSubmitting}
-                                    className="px-8 h-10 shadow-md rounded-xl font-semibold text-sm transition-all hover:scale-105 active:scale-95"
+                                    className="px-8 h-10 shadow-md rounded-xl font-semibold text-sm transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90"
                                 >
                                     {isSubmitting ? (
                                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
