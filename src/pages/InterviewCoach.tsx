@@ -375,16 +375,16 @@ const InterviewCoach = () => {
     const timeRemaining = Math.max(0, timeLimit - elapsedTime);
 
     return (
-        <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans">
+        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Immersive Header */}
-            <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex-shrink-0 shadow-sm z-20">
+            <header className="bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0 shadow-sm z-20">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
                             <Video className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                            <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-none">Mock Interview</h1>
+                            <h1 className="text-lg font-bold text-slate-900 leading-none">Mock Interview</h1>
                             <p className="text-xs text-muted-foreground font-medium mt-1">{interviewData!.setupData.jobRole}</p>
                         </div>
                     </div>
@@ -394,13 +394,13 @@ const InterviewCoach = () => {
                             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">Time Remaining</span>
                             <div className={cn(
                                 "flex items-center gap-1.5 font-mono font-bold text-lg leading-none",
-                                timeRemaining < 300 ? "text-red-500 animate-pulse" : "text-slate-700 dark:text-slate-200"
+                                timeRemaining < 300 ? "text-red-500 animate-pulse" : "text-slate-700"
                             )}>
                                 <Clock className="h-4 w-4" />
                                 {formatDuration(timeRemaining)}
                             </div>
                         </div>
-                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+                        <div className="h-8 w-px bg-slate-200"></div>
                         <Button 
                             variant="destructive" 
                             size="sm" 
@@ -414,22 +414,22 @@ const InterviewCoach = () => {
             </header>
 
             {/* Main Workspace */}
-            <main className="flex-grow p-4 md:p-6 overflow-y-auto bg-slate-50/50 dark:bg-slate-950">
+            <main className="flex-grow p-4 md:p-6 overflow-y-auto bg-slate-50">
                 <div className="max-w-7xl mx-auto h-full flex flex-col gap-6">
                     {/* Progress Bar */}
-                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
                         <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-900 dark:text-white">Question {currentQuestionIndex + 1}</span>
+                            <span className="text-sm font-bold text-slate-900">Question {currentQuestionIndex + 1}</span>
                             <span className="text-xs text-muted-foreground">of {interviewData!.questions.length}</span>
                         </div>
-                        <div className="flex-1 h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
                             <div 
                                 className="h-full bg-primary transition-all duration-700 ease-out rounded-full shadow-[0_0_10px_rgba(37,99,235,0.3)]" 
                                 style={{ width: `${progress}%` }} 
                             />
                         </div>
-                        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
-                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{Math.round(progress)}%</span>
+                        <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full">
+                            <span className="text-xs font-bold text-slate-700">{Math.round(progress)}%</span>
                         </div>
                     </div>
 
@@ -437,31 +437,31 @@ const InterviewCoach = () => {
                         {/* Left Column: Question & Answer */}
                         <div className="flex flex-col gap-4 h-full min-h-[400px]">
                             {/* Question Card */}
-                            <Card className="p-6 md:p-8 bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow">
+                            <Card className="p-6 md:p-8 bg-white border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow">
                                 <div className="flex flex-wrap items-center gap-2 mb-4">
-                                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 hover:bg-blue-100 border-blue-100">
+                                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100">
                                         {currentQuestion.category}
                                     </Badge>
                                     <Badge variant="outline" className={cn(
-                                        "border-slate-200 dark:border-slate-700",
-                                        currentQuestion.difficulty === 'hard' ? "text-red-500 bg-red-50 dark:bg-red-900/10" :
-                                        currentQuestion.difficulty === 'medium' ? "text-yellow-600 bg-yellow-50 dark:bg-yellow-900/10" :
-                                        "text-green-600 bg-green-50 dark:bg-green-900/10"
+                                        "border-slate-200",
+                                        currentQuestion.difficulty === 'hard' ? "text-red-600 bg-red-50" :
+                                        currentQuestion.difficulty === 'medium' ? "text-yellow-600 bg-yellow-50" :
+                                        "text-green-600 bg-green-50"
                                     )}>
                                         {currentQuestion.difficulty}
                                     </Badge>
                                 </div>
-                                <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white leading-relaxed tracking-tight">
+                                <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
                                     {currentQuestion.question}
                                 </h2>
                             </Card>
 
                             {/* Answer Area */}
-                            <Card className="flex-grow flex flex-col shadow-sm border-slate-200 dark:border-slate-800 relative overflow-hidden bg-white dark:bg-slate-900">
-                                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+                            <Card className="flex-grow flex flex-col shadow-sm border-slate-200 relative overflow-hidden bg-white">
+                                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-slate-400 animate-pulse"></div>
-                                        <h3 className="font-semibold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Your Response</h3>
+                                        <h3 className="font-semibold text-xs text-slate-500 uppercase tracking-widest">Your Response</h3>
                                     </div>
                                     <Button
                                         variant={isListening ? "destructive" : "default"}
@@ -469,7 +469,7 @@ const InterviewCoach = () => {
                                         onClick={toggleListening}
                                         className={cn(
                                             "transition-all duration-300 shadow-sm", 
-                                            isListening ? "animate-pulse" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
+                                            isListening ? "animate-pulse" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
                                         )}
                                     >
                                         {isListening ? (
@@ -489,11 +489,11 @@ const InterviewCoach = () => {
                                         value={currentAnswer}
                                         onChange={(e) => setCurrentAnswer(e.target.value)}
                                         placeholder="Type your answer here or click 'Start Recording' to speak..."
-                                        className="h-full resize-none border-0 focus-visible:ring-0 text-base p-6 leading-relaxed bg-transparent"
+                                        className="h-full resize-none border-0 focus-visible:ring-0 text-base p-6 leading-relaxed bg-transparent text-slate-800 placeholder:text-slate-400"
                                         disabled={isSubmittingAnswer}
                                     />
                                     {isListening && (
-                                        <div className="absolute bottom-6 right-6 flex items-center gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold border border-red-100 dark:border-red-900/30 animate-in fade-in slide-in-from-bottom-2">
+                                        <div className="absolute bottom-6 right-6 flex items-center gap-3 px-4 py-2 bg-red-50 text-red-600 rounded-full text-xs font-bold border border-red-100 animate-in fade-in slide-in-from-bottom-2">
                                             <span className="relative flex h-2.5 w-2.5">
                                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
@@ -503,7 +503,7 @@ const InterviewCoach = () => {
                                     )}
                                 </div>
 
-                                <div className="p-4 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
                                     <div className="text-xs text-muted-foreground font-medium flex items-center gap-2">
                                         <div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div>
                                         {currentAnswer.length} characters
@@ -527,7 +527,7 @@ const InterviewCoach = () => {
 
                         {/* Right Column: Video Preview & Tips */}
                         <div className="flex flex-col h-full gap-4">
-                            <Card className="flex-grow bg-slate-950 rounded-2xl overflow-hidden shadow-xl border-slate-800 relative group min-h-[300px]">
+                            <Card className="flex-grow bg-slate-900 rounded-2xl overflow-hidden shadow-xl border-slate-800 relative group min-h-[300px]">
                                 <video
                                     ref={videoRef}
                                     autoPlay
@@ -579,14 +579,14 @@ const InterviewCoach = () => {
                                 </div>
                             </Card>
                             
-                            <Card className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900/30 shadow-sm">
+                            <Card className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 shadow-sm">
                                 <div className="flex gap-3">
-                                    <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-lg h-fit">
-                                        <Volume2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                    <div className="bg-blue-100 p-2 rounded-lg h-fit">
+                                        <Volume2 className="h-5 w-5 text-blue-600" />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-sm text-blue-900 dark:text-blue-300 mb-1">Coach's Tip</h4>
-                                        <p className="text-sm text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
+                                        <h4 className="font-bold text-sm text-blue-900 mb-1">Coach's Tip</h4>
+                                        <p className="text-sm text-blue-800 leading-relaxed">
                                             Structure your answer using the <strong>STAR method</strong> (Situation, Task, Action, Result) for behavioral questions. Be specific about your contributions.
                                         </p>
                                     </div>
@@ -599,8 +599,8 @@ const InterviewCoach = () => {
 
             {/* Analysis Overlay */}
             {isGeneratingReport && (
-                <div className="fixed inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-500">
-                    <Card className="p-10 text-center max-w-md shadow-2xl border-none bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800">
+                <div className="fixed inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+                    <Card className="p-10 text-center max-w-md shadow-2xl border-none bg-white ring-1 ring-slate-200">
                         <div className="relative mb-8 mx-auto w-24 h-24">
                             <div className="absolute inset-0 rounded-full border-t-4 border-primary animate-spin"></div>
                             <div className="absolute inset-2 rounded-full border-r-4 border-purple-500 animate-spin animation-delay-150"></div>
@@ -609,7 +609,7 @@ const InterviewCoach = () => {
                                 <CheckCircle2 className="h-8 w-8 text-green-500 animate-pulse" />
                             </div>
                         </div>
-                        <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Generating Report</h2>
+                        <h2 className="text-2xl font-bold mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Analyzing Performance</h2>
                         <p className="text-muted-foreground leading-relaxed mb-6 text-lg">
                             Analyzing your performance, checking technical accuracy, and preparing detailed feedback...
                         </p>
@@ -618,7 +618,7 @@ const InterviewCoach = () => {
                                 <span>Progress</span>
                                 <span>{analysisProgress}%</span>
                             </div>
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                                 <div 
                                     className="h-full bg-gradient-to-r from-primary to-purple-600 transition-all duration-300 rounded-full"
                                     style={{ width: `${analysisProgress}%` }}
