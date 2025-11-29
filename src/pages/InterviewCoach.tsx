@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
     Mic, MicOff, Square, Volume2, Loader2, ChevronRight, 
-    Home, PlusCircle, Settings, Keyboard, Bot, Sparkles, 
-    CheckCircle2 
+    Home, Settings, Keyboard, Bot, Sparkles, 
+    CheckCircle2, VolumeX, ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils';
 import { InterviewReport } from '@/components/InterviewReport';
 import { InterviewData, InterviewResponse } from '@/types/interview';
 import { evaluateInterviewResponse, generateInterviewReport } from '@/lib/gemini';
-import { calculatePerformanceScore, formatDuration } from '@/lib/interview-service';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from "@/components/ui/progress";
@@ -36,14 +35,13 @@ const InterviewCoach = () => {
     // Refs
     const timerIntervalRef = useRef<number | null>(null);
     const recognitionRef = useRef<any>(null);
-    const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const dataArrayRef = useRef<Uint8Array | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
-    const answerRef = useRef(''); // Ref to track answer state inside callbacks
+    const answerRef = useRef('');
 
     // Initial state
     const [interviewData, setInterviewData] = useState<InterviewData | null>(null);
@@ -51,8 +49,6 @@ const InterviewCoach = () => {
 
     // Settings
     const [inputMode, setInputMode] = useState<InputMode>('voice');
-    const [autoSubmit, setAutoSubmit] = useState(true);
-    const [autoNext, setAutoNext] = useState(true);
     const [isTTSEnabled, setIsTTSEnabled] = useState(true);
 
     // Status
@@ -65,30 +61,38 @@ const InterviewCoach = () => {
     const [displayedQuestion, setDisplayedQuestion] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [currentAnswer, setCurrentAnswer] = useState('');
-    const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [questionStartTime, setQuestionStartTime] = useState(0);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState(0);
-    const [isWaitingForNext, setIsWaitingForNext] = useState(false);
 
-    // Sync ref with state
-    useEffect(() => {
-        answerRef.current = currentAnswer;
-    }, [currentAnswer]);
+    // --- Audio Logic Definitions (Hoisted) ---
 
-    // Cleanup
-    useEffect(() => {
-        return () => {
-            stopAudioAnalysis();
-            stopTTS();
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-            if (recognitionRef.current) recognitionRef.current.stop();
-        };
+    const stopAudioAnalysis = useCallback(() => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+        setAudioLevel(0);
     }, []);
 
-    // Initialize
+    const stopTTS = useCallback(() => {
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
+        setIsAiSpeaking(false);
+    }, []);
+
+    const stopListening = useCallback(() => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
+        setIsListening(false);
+        stopAudioAnalysis();
+    }, [stopAudioAnalysis]);
+
+    // Initialize Data
     useEffect(() => {
         const data = location.state?.interviewData as InterviewData;
         if (data) {
@@ -96,26 +100,25 @@ const InterviewCoach = () => {
             setQuestionStartTime(Date.now());
             
             const settings = getAutoSaveSettings();
-            setAutoSubmit(settings.interviewAutoSubmit);
-            setAutoNext(settings.interviewAutoNext);
             setIsTTSEnabled(settings.interviewTTS);
         } else {
             navigate('/dashboard/interview');
         }
-    }, [location.state, navigate]);
+        
+        return () => {
+            stopAudioAnalysis();
+            stopTTS();
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        };
+    }, [location.state, navigate, stopAudioAnalysis, stopTTS]);
 
     // Handle Settings
     const handleSettingChange = (key: string, value: boolean) => {
-        if (key === 'autoSubmit') setAutoSubmit(value);
-        if (key === 'autoNext') setAutoNext(value);
         if (key === 'tts') {
             setIsTTSEnabled(value);
             if (!value) stopTTS();
+            updateInterviewSettings({ interviewTTS: value });
         }
-        
-        const globalKey = key === 'autoSubmit' ? 'interviewAutoSubmit' : 
-                          key === 'autoNext' ? 'interviewAutoNext' : 'interviewTTS';
-        updateInterviewSettings({ [globalKey]: value });
     };
 
     // --- Audio Visualization Logic ---
@@ -143,6 +146,7 @@ const InterviewCoach = () => {
 
             const updateVolume = () => {
                 if (!analyserRef.current || !dataArrayRef.current) return;
+                
                 analyserRef.current.getByteFrequencyData(dataArrayRef.current);
                 
                 let sum = 0;
@@ -150,7 +154,8 @@ const InterviewCoach = () => {
                     sum += dataArrayRef.current[i];
                 }
                 const average = sum / bufferLength;
-                const level = Math.min(100, Math.round(average * 2)); 
+                
+                const level = Math.min(100, Math.round(average * 1.5)); 
                 setAudioLevel(level);
                 
                 animationFrameRef.current = requestAnimationFrame(updateVolume);
@@ -162,18 +167,12 @@ const InterviewCoach = () => {
         }
     };
 
-    const stopAudioAnalysis = () => {
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-        }
-        setAudioLevel(0);
-    };
-
     // --- Text to Speech Logic ---
     const speakText = useCallback((text: string) => {
         if (!isTTSEnabled || !window.speechSynthesis) return;
 
         window.speechSynthesis.cancel();
+
         const utterance = new SpeechSynthesisUtterance(text);
         
         const voices = window.speechSynthesis.getVoices();
@@ -194,95 +193,7 @@ const InterviewCoach = () => {
         window.speechSynthesis.speak(utterance);
     }, [isTTSEnabled]);
 
-    const stopTTS = () => {
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-        setIsAiSpeaking(false);
-    };
-
-    // --- Submit Logic (Moved up for access) ---
-    const handleSubmitAnswer = useCallback(async () => {
-        if (!interviewData || isSubmittingAnswer) return;
-        
-        // Use ref to get latest answer in case this is called from closure
-        const finalAnswer = answerRef.current; 
-
-        if (!finalAnswer.trim()) return;
-
-        stopListening();
-        stopTTS();
-        setIsSubmittingAnswer(true);
-
-        try {
-            const currentQuestion = interviewData.questions[currentQuestionIndex];
-            const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
-
-            const response: InterviewResponse = {
-                questionId: currentQuestion.id,
-                answer: finalAnswer,
-                timestamp: Date.now(),
-                duration: questionDuration
-            };
-
-            const updatedResponses = [...interviewData.responses, response];
-            const updatedData = {
-                ...interviewData,
-                responses: updatedResponses,
-                currentQuestionIndex: currentQuestionIndex + 1
-            };
-
-            setInterviewData(updatedData);
-
-            if (currentQuestionIndex + 1 >= interviewData.questions.length) {
-                await completeInterview(updatedData);
-            } else {
-                if (autoNext) {
-                    setIsWaitingForNext(true);
-                    setTimeout(() => {
-                        setCurrentQuestionIndex(prev => prev + 1);
-                        setCurrentAnswer('');
-                        answerRef.current = ''; // Reset ref
-                        setIsWaitingForNext(false);
-                    }, 1500);
-                } else {
-                    setIsWaitingForNext(true);
-                }
-            }
-        } catch (error: any) {
-            console.error('Error submitting answer:', error);
-            toast({
-                title: 'Submission Failed',
-                description: error.message || 'Please try again.',
-                variant: 'destructive'
-            });
-            setIsSubmittingAnswer(false);
-        } finally {
-            if (!autoNext && !(currentQuestionIndex + 1 >= interviewData.questions.length)) {
-                setIsSubmittingAnswer(false);
-            }
-            // AutoNext handles state reset via timeout/index change
-        }
-    }, [interviewData, currentQuestionIndex, questionStartTime, autoNext, isSubmittingAnswer, toast]); // Removed cycle
-
-    // --- Speech Recognition ---
-    const handleSilenceDetected = useCallback(() => {
-        if (answerRef.current.trim().length > 0) {
-            handleSubmitAnswer();
-        } else {
-            // No speech detected, just restart timer if still listening
-            // Or do nothing and let user speak
-        }
-    }, [handleSubmitAnswer]);
-
-    const resetSilenceTimer = useCallback(() => {
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-        if (inputMode === 'voice' && autoSubmit) {
-            silenceTimerRef.current = setTimeout(() => {
-                handleSilenceDetected();
-            }, 2500); // 2.5s silence triggers submit
-        }
-    }, [inputMode, autoSubmit, handleSilenceDetected]);
-
+    // --- Speech Recognition Setup ---
     const startListening = useCallback(() => {
         try {
             if (recognitionRef.current && !isListening) {
@@ -290,21 +201,12 @@ const InterviewCoach = () => {
                 recognitionRef.current.start();
                 setIsListening(true);
                 startAudioAnalysis();
-                resetSilenceTimer(); // Start timer immediately
             }
         } catch (e) {
-            console.log("Mic already active");
+            console.log("Mic already active or blocked");
         }
-    }, [isListening, resetSilenceTimer]);
+    }, [isListening, stopTTS]);
 
-    const stopListening = useCallback(() => {
-        if (recognitionRef.current) recognitionRef.current.stop();
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        setIsListening(false);
-        stopAudioAnalysis();
-    }, []);
-
-    // Initialize Recognition
     useEffect(() => {
         if (phase === 'interview' && typeof window !== 'undefined') {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -330,14 +232,12 @@ const InterviewCoach = () => {
 
                     if (finalTranscript) {
                         setCurrentAnswer(prev => prev + finalTranscript);
-                        resetSilenceTimer();
-                    } else {
-                        resetSilenceTimer();
+                        // Update ref immediately for callbacks
+                        answerRef.current = currentAnswer + finalTranscript; 
                     }
                 };
 
                 recognition.onerror = (event: any) => {
-                    // Don't stop on no-speech errors, just keep listening
                     if (event.error !== 'no-speech') {
                         setIsListening(false);
                         stopAudioAnalysis();
@@ -345,9 +245,6 @@ const InterviewCoach = () => {
                 };
 
                 recognition.onend = () => {
-                    // If we didn't manually stop (isListening is true), restart
-                    // But we rely on isListening state which might be stale in callback?
-                    // safer to let user/logic handle restart
                     setIsListening(false);
                     stopAudioAnalysis();
                 };
@@ -355,7 +252,11 @@ const InterviewCoach = () => {
                 recognitionRef.current = recognition;
             }
         }
-    }, [phase, resetSilenceTimer]);
+        
+        return () => {
+            if (recognitionRef.current) recognitionRef.current.stop();
+        };
+    }, [phase, currentAnswer]);
 
     // --- Question Typing Effect ---
     useEffect(() => {
@@ -379,8 +280,8 @@ const InterviewCoach = () => {
                 speakText(questionText);
                 
                 if (inputMode === 'voice') {
-                    // Delay start listening to avoid self-triggering
-                    setTimeout(() => startListening(), 1000); 
+                    // Small delay to ensure TTS starts first
+                    setTimeout(() => startListening(), 800);
                 }
             }
         };
@@ -391,9 +292,8 @@ const InterviewCoach = () => {
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             stopTTS();
         };
-    }, [currentQuestionIndex, interviewData, phase, inputMode]); 
+    }, [currentQuestionIndex, interviewData, phase, inputMode, startListening, stopListening, stopTTS, speakText]);
 
-    // Helper to toggle mic manually
     const toggleListening = () => {
         if (isListening) stopListening();
         else startListening();
@@ -403,13 +303,68 @@ const InterviewCoach = () => {
         const newMode = inputMode === 'voice' ? 'text' : 'voice';
         setInputMode(newMode);
         if (newMode === 'text') stopListening();
-        else if (!isTyping && !isSubmittingAnswer && !isWaitingForNext) startListening();
     };
 
-    const handleManualNext = () => {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setCurrentAnswer('');
-        setIsWaitingForNext(false);
+    const handleSubmitAnswer = async () => {
+        if (!interviewData || isSubmitting || !currentAnswer.trim()) return;
+        
+        stopListening();
+        stopTTS();
+        setIsSubmitting(true);
+
+        try {
+            const currentQuestion = interviewData.questions[currentQuestionIndex];
+            const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
+
+            const response: InterviewResponse = {
+                questionId: currentQuestion.id,
+                answer: currentAnswer,
+                timestamp: Date.now(),
+                duration: questionDuration
+            };
+
+            const updatedResponses = [...interviewData.responses, response];
+            const updatedData = {
+                ...interviewData,
+                responses: updatedResponses,
+                // Don't increment index yet, wait for user to click Next
+            };
+
+            setInterviewData(updatedData);
+            setIsAnswerSubmitted(true);
+            toast({ title: 'Answer Saved', description: 'Click Next to proceed.' });
+
+        } catch (error: any) {
+            console.error('Error submitting answer:', error);
+            toast({
+                title: 'Submission Failed',
+                description: error.message || 'Please try again.',
+                variant: 'destructive'
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleNextQuestion = () => {
+        if (!interviewData) return;
+
+        if (currentQuestionIndex + 1 >= interviewData.questions.length) {
+            completeInterview(interviewData);
+        } else {
+            setCurrentQuestionIndex(prev => prev + 1);
+            setCurrentAnswer('');
+            answerRef.current = '';
+            setIsAnswerSubmitted(false);
+        }
+    };
+
+    const handleExit = () => {
+        if (confirm("Exit interview? Progress will be lost.")) {
+            stopListening();
+            stopTTS();
+            navigate('/dashboard');
+        }
     };
 
     const completeInterview = async (finalData: InterviewData) => {
@@ -427,7 +382,7 @@ const InterviewCoach = () => {
                 const question = finalData.questions.find(q => q.id === response.questionId);
                 
                 if (question) {
-                    setAnalysisProgress(Math.round(((i) / totalResponses) * 60));
+                    setAnalysisProgress(Math.round(((i) / totalResponses) * 50));
                     const evaluation = await evaluateInterviewResponse(
                         question.question,
                         response.answer,
@@ -439,7 +394,7 @@ const InterviewCoach = () => {
                 }
             }
 
-            setAnalysisProgress(70);
+            setAnalysisProgress(60);
             const dataWithEvaluations = { ...finalData, responses: evaluatedResponses };
             const report = await generateInterviewReport(dataWithEvaluations);
             setAnalysisProgress(100);
@@ -461,14 +416,6 @@ const InterviewCoach = () => {
         }
     };
 
-    const handleExit = () => {
-        if (confirm("Exit interview? Progress will be lost.")) {
-            stopListening();
-            stopTTS();
-            navigate('/dashboard');
-        }
-    };
-
     // Timer
     useEffect(() => {
         if (phase === 'interview' && interviewData) {
@@ -477,7 +424,12 @@ const InterviewCoach = () => {
                 setElapsedTime(elapsed);
                 if (elapsed >= interviewData.setupData.duration * 60) {
                     toast({ title: 'Time Up!', description: 'Interview time limit reached.', variant: 'destructive' });
-                    completeInterview(interviewData);
+                    // Force complete even if not all questions answered
+                    if (interviewData.responses.length > 0) {
+                        completeInterview(interviewData);
+                    } else {
+                        navigate('/dashboard');
+                    }
                 }
             }, 1000);
             return () => {
@@ -499,14 +451,14 @@ const InterviewCoach = () => {
     }
 
     const currentQuestion = interviewData!.questions[currentQuestionIndex];
-    const progress = ((currentQuestionIndex) / interviewData!.questions.length) * 100;
-    const timeRemaining = Math.max(0, (interviewData!.setupData.duration * 60) - elapsedTime);
+    const progress = ((currentQuestionIndex + 1) / interviewData!.questions.length) * 100;
+    const isLastQuestion = currentQuestionIndex + 1 === interviewData!.questions.length;
 
     // Determine status text
     let statusText = "Ready";
     if (isGeneratingReport) statusText = "Generating Report...";
-    else if (isSubmittingAnswer) statusText = "Submitting...";
-    else if (isWaitingForNext) statusText = "Saved. Moving to next...";
+    else if (isSubmitting) statusText = "Saving answer...";
+    else if (isAnswerSubmitted) statusText = "Answer saved. Ready for next.";
     else if (isTyping) statusText = "Interviewer is asking...";
     else if (isAiSpeaking) statusText = "Interviewer is speaking...";
     else if (isListening) statusText = "Listening to you...";
@@ -521,13 +473,14 @@ const InterviewCoach = () => {
                     <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard">
                         <Home className="h-5 w-5 text-slate-500" />
                     </Button>
+                    <div className="w-px h-8 bg-slate-200"></div>
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
                             <Bot className="h-5 w-5 text-primary" />
                         </div>
                         <div>
                             <h1 className="text-sm font-bold text-slate-900 leading-none">AI Coach</h1>
-                            <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{interviewData!.setupData.jobRole}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{interviewData!.setupData.jobRole}</p>
                         </div>
                     </div>
                 </div>
@@ -539,26 +492,12 @@ const InterviewCoach = () => {
                                 <Settings className="h-5 w-5" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-80 p-4 mr-4">
+                        <PopoverContent className="w-72 p-4 mr-4">
                             <h4 className="font-medium mb-3 text-sm">Session Settings</h4>
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <Label htmlFor="tts" className="text-sm">AI Voice (Text-to-Speech)</Label>
                                     <Switch id="tts" checked={isTTSEnabled} onCheckedChange={(v) => handleSettingChange('tts', v)} />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="auto-submit" className="text-sm flex flex-col">
-                                        <span>Auto-Submit Answer</span>
-                                        <span className="text-xs text-muted-foreground font-normal">On silence detection</span>
-                                    </Label>
-                                    <Switch id="auto-submit" checked={autoSubmit} onCheckedChange={(v) => handleSettingChange('autoSubmit', v)} />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="auto-next" className="text-sm flex flex-col">
-                                        <span>Auto-Next Question</span>
-                                        <span className="text-xs text-muted-foreground font-normal">After submitting</span>
-                                    </Label>
-                                    <Switch id="auto-next" checked={autoNext} onCheckedChange={(v) => handleSettingChange('autoNext', v)} />
                                 </div>
                             </div>
                         </PopoverContent>
@@ -594,7 +533,7 @@ const InterviewCoach = () => {
                                         )}
                                         style={{
                                             transform: isListening 
-                                                ? `scale(${1 + (audioLevel / 200)})` // Scale based on user mic volume
+                                                ? `scale(${1 + (audioLevel / 200)})` 
                                                 : isAiSpeaking 
                                                     ? 'scale(1.1)' 
                                                     : 'scale(1)'
@@ -703,10 +642,10 @@ const InterviewCoach = () => {
                                     onChange={(e) => setCurrentAnswer(e.target.value)}
                                     placeholder={inputMode === 'voice' ? "Listening... Speak your answer clearly." : "Type your answer here..."}
                                     className="h-full resize-none border-0 focus-visible:ring-0 text-lg p-6 leading-relaxed bg-transparent text-slate-800 placeholder:text-slate-300"
-                                    disabled={isSubmittingAnswer || isWaitingForNext}
+                                    disabled={isSubmitting || isAnswerSubmitted}
                                 />
                                 
-                                {inputMode === 'voice' && (
+                                {inputMode === 'voice' && !isAnswerSubmitted && (
                                     <div className="absolute bottom-4 right-4">
                                         <Button
                                             size="icon"
@@ -728,23 +667,25 @@ const InterviewCoach = () => {
                                     {currentAnswer.length} chars
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button
-                                        onClick={handleSubmitAnswer}
-                                        disabled={!currentAnswer.trim() || isSubmittingAnswer || isWaitingForNext}
-                                        className="px-6 h-9 shadow-sm"
-                                    >
-                                        {isSubmittingAnswer ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : isWaitingForNext ? (
-                                            <CheckCircle2 className="h-4 w-4" />
-                                        ) : (
-                                            <>Submit <ChevronRight className="ml-2 h-4 w-4" /></>
-                                        )}
-                                    </Button>
-                                    
-                                    {!autoNext && isWaitingForNext && (
-                                        <Button onClick={handleManualNext} className="h-9">
-                                            Next <ChevronRight className="ml-2 h-4 w-4" />
+                                    {isAnswerSubmitted ? (
+                                        <Button 
+                                            onClick={handleNextQuestion} 
+                                            className="px-6 h-9 shadow-sm bg-green-600 hover:bg-green-700"
+                                        >
+                                            {isLastQuestion ? 'Finish Interview' : 'Next Question'} 
+                                            <ArrowRight className="ml-2 h-4 w-4" />
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            onClick={handleSubmitAnswer}
+                                            disabled={!currentAnswer.trim() || isSubmitting}
+                                            className="px-6 h-9 shadow-sm"
+                                        >
+                                            {isSubmitting ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <>Submit Answer <CheckCircle2 className="ml-2 h-4 w-4" /></>
+                                            )}
                                         </Button>
                                     )}
                                 </div>
