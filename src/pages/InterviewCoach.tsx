@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
     Mic, MicOff, Square, Volume2, Loader2, ChevronRight, 
     Home, PlusCircle, Settings, Keyboard, Bot, Sparkles, 
-    CheckCircle2, VolumeX 
+    CheckCircle2 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -43,6 +43,7 @@ const InterviewCoach = () => {
     const dataArrayRef = useRef<Uint8Array | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
+    const answerRef = useRef(''); // Ref to track answer state inside callbacks
 
     // Initial state
     const [interviewData, setInterviewData] = useState<InterviewData | null>(null);
@@ -57,7 +58,7 @@ const InterviewCoach = () => {
     // Status
     const [isListening, setIsListening] = useState(false);
     const [isAiSpeaking, setIsAiSpeaking] = useState(false);
-    const [audioLevel, setAudioLevel] = useState(0); // 0-100 for visualizer
+    const [audioLevel, setAudioLevel] = useState(0);
 
     // Interview flow
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -71,34 +72,23 @@ const InterviewCoach = () => {
     const [analysisProgress, setAnalysisProgress] = useState(0);
     const [isWaitingForNext, setIsWaitingForNext] = useState(false);
 
-    // --- Audio Logic Definitions (Hoisted) ---
+    // Sync ref with state
+    useEffect(() => {
+        answerRef.current = currentAnswer;
+    }, [currentAnswer]);
 
-    const stopAudioAnalysis = useCallback(() => {
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-        }
-        setAudioLevel(0);
+    // Cleanup
+    useEffect(() => {
+        return () => {
+            stopAudioAnalysis();
+            stopTTS();
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            if (recognitionRef.current) recognitionRef.current.stop();
+        };
     }, []);
 
-    const stopTTS = useCallback(() => {
-        if (window.speechSynthesis) {
-            window.speechSynthesis.cancel();
-        }
-        setIsAiSpeaking(false);
-    }, []);
-
-    const stopListening = useCallback(() => {
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-        }
-        if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-        }
-        setIsListening(false);
-        stopAudioAnalysis();
-    }, [stopAudioAnalysis]);
-
-    // Initialize Data
+    // Initialize
     useEffect(() => {
         const data = location.state?.interviewData as InterviewData;
         if (data) {
@@ -112,13 +102,7 @@ const InterviewCoach = () => {
         } else {
             navigate('/dashboard/interview');
         }
-        
-        return () => {
-            stopAudioAnalysis();
-            stopTTS();
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-        };
-    }, [location.state, navigate, stopAudioAnalysis, stopTTS]);
+    }, [location.state, navigate]);
 
     // Handle Settings
     const handleSettingChange = (key: string, value: boolean) => {
@@ -145,7 +129,6 @@ const InterviewCoach = () => {
                 mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
             }
 
-            // Check if context is suspended (browser policy)
             if (audioContextRef.current.state === 'suspended') {
                 await audioContextRef.current.resume();
             }
@@ -160,7 +143,6 @@ const InterviewCoach = () => {
 
             const updateVolume = () => {
                 if (!analyserRef.current || !dataArrayRef.current) return;
-                
                 analyserRef.current.getByteFrequencyData(dataArrayRef.current);
                 
                 let sum = 0;
@@ -168,8 +150,7 @@ const InterviewCoach = () => {
                     sum += dataArrayRef.current[i];
                 }
                 const average = sum / bufferLength;
-                
-                const level = Math.min(100, Math.round(average * 1.5)); 
+                const level = Math.min(100, Math.round(average * 2)); 
                 setAudioLevel(level);
                 
                 animationFrameRef.current = requestAnimationFrame(updateVolume);
@@ -181,16 +162,21 @@ const InterviewCoach = () => {
         }
     };
 
+    const stopAudioAnalysis = () => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+        setAudioLevel(0);
+    };
+
     // --- Text to Speech Logic ---
     const speakText = useCallback((text: string) => {
         if (!isTTSEnabled || !window.speechSynthesis) return;
 
         window.speechSynthesis.cancel();
-
         const utterance = new SpeechSynthesisUtterance(text);
         
         const voices = window.speechSynthesis.getVoices();
-        // Prefer natural sounding voices
         const preferredVoice = voices.find(v => 
             v.name.includes('Google US English') || 
             v.name.includes('Samantha') ||
@@ -208,7 +194,95 @@ const InterviewCoach = () => {
         window.speechSynthesis.speak(utterance);
     }, [isTTSEnabled]);
 
-    // --- Speech Recognition Setup ---
+    const stopTTS = () => {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        setIsAiSpeaking(false);
+    };
+
+    // --- Submit Logic (Moved up for access) ---
+    const handleSubmitAnswer = useCallback(async () => {
+        if (!interviewData || isSubmittingAnswer) return;
+        
+        // Use ref to get latest answer in case this is called from closure
+        const finalAnswer = answerRef.current; 
+
+        if (!finalAnswer.trim()) return;
+
+        stopListening();
+        stopTTS();
+        setIsSubmittingAnswer(true);
+
+        try {
+            const currentQuestion = interviewData.questions[currentQuestionIndex];
+            const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
+
+            const response: InterviewResponse = {
+                questionId: currentQuestion.id,
+                answer: finalAnswer,
+                timestamp: Date.now(),
+                duration: questionDuration
+            };
+
+            const updatedResponses = [...interviewData.responses, response];
+            const updatedData = {
+                ...interviewData,
+                responses: updatedResponses,
+                currentQuestionIndex: currentQuestionIndex + 1
+            };
+
+            setInterviewData(updatedData);
+
+            if (currentQuestionIndex + 1 >= interviewData.questions.length) {
+                await completeInterview(updatedData);
+            } else {
+                if (autoNext) {
+                    setIsWaitingForNext(true);
+                    setTimeout(() => {
+                        setCurrentQuestionIndex(prev => prev + 1);
+                        setCurrentAnswer('');
+                        answerRef.current = ''; // Reset ref
+                        setIsWaitingForNext(false);
+                    }, 1500);
+                } else {
+                    setIsWaitingForNext(true);
+                }
+            }
+        } catch (error: any) {
+            console.error('Error submitting answer:', error);
+            toast({
+                title: 'Submission Failed',
+                description: error.message || 'Please try again.',
+                variant: 'destructive'
+            });
+            setIsSubmittingAnswer(false);
+        } finally {
+            if (!autoNext && !(currentQuestionIndex + 1 >= interviewData.questions.length)) {
+                setIsSubmittingAnswer(false);
+            }
+            // AutoNext handles state reset via timeout/index change
+        }
+    }, [interviewData, currentQuestionIndex, questionStartTime, autoNext, isSubmittingAnswer, toast]); // Removed cycle
+
+    // --- Speech Recognition ---
+    const handleSilenceDetected = useCallback(() => {
+        if (answerRef.current.trim().length > 0) {
+            handleSubmitAnswer();
+        } else {
+            // No speech detected, just restart timer if still listening
+            // Or do nothing and let user speak
+        }
+    }, [handleSubmitAnswer]);
+
+    const resetSilenceTimer = useCallback(() => {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+        if (inputMode === 'voice' && autoSubmit) {
+            silenceTimerRef.current = setTimeout(() => {
+                handleSilenceDetected();
+            }, 2500); // 2.5s silence triggers submit
+        }
+    }, [inputMode, autoSubmit, handleSilenceDetected]);
+
     const startListening = useCallback(() => {
         try {
             if (recognitionRef.current && !isListening) {
@@ -216,29 +290,21 @@ const InterviewCoach = () => {
                 recognitionRef.current.start();
                 setIsListening(true);
                 startAudioAnalysis();
+                resetSilenceTimer(); // Start timer immediately
             }
         } catch (e) {
-            console.log("Mic already active or blocked");
+            console.log("Mic already active");
         }
-    }, [isListening, stopTTS]);
+    }, [isListening, resetSilenceTimer]);
 
-    const resetSilenceTimer = useCallback(() => {
-        if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-        }
+    const stopListening = useCallback(() => {
+        if (recognitionRef.current) recognitionRef.current.stop();
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        setIsListening(false);
+        stopAudioAnalysis();
+    }, []);
 
-        if (inputMode === 'voice' && autoSubmit) {
-            silenceTimerRef.current = setTimeout(() => {
-                // Auto-submit logic via DOM trigger for safety
-                if (isListening) {
-                    stopListening();
-                    const submitBtn = document.getElementById('auto-submit-trigger');
-                    if (submitBtn) submitBtn.click();
-                }
-            }, 2500); 
-        }
-    }, [inputMode, autoSubmit, isListening, stopListening]);
-
+    // Initialize Recognition
     useEffect(() => {
         if (phase === 'interview' && typeof window !== 'undefined') {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -266,12 +332,12 @@ const InterviewCoach = () => {
                         setCurrentAnswer(prev => prev + finalTranscript);
                         resetSilenceTimer();
                     } else {
-                        // Interim results
                         resetSilenceTimer();
                     }
                 };
 
                 recognition.onerror = (event: any) => {
+                    // Don't stop on no-speech errors, just keep listening
                     if (event.error !== 'no-speech') {
                         setIsListening(false);
                         stopAudioAnalysis();
@@ -279,6 +345,9 @@ const InterviewCoach = () => {
                 };
 
                 recognition.onend = () => {
+                    // If we didn't manually stop (isListening is true), restart
+                    // But we rely on isListening state which might be stale in callback?
+                    // safer to let user/logic handle restart
                     setIsListening(false);
                     stopAudioAnalysis();
                 };
@@ -286,12 +355,7 @@ const InterviewCoach = () => {
                 recognitionRef.current = recognition;
             }
         }
-        
-        return () => {
-            if (recognitionRef.current) recognitionRef.current.stop();
-            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        };
-    }, [phase, resetSilenceTimer]); // Added resetSilenceTimer dependency
+    }, [phase, resetSilenceTimer]);
 
     // --- Question Typing Effect ---
     useEffect(() => {
@@ -315,8 +379,8 @@ const InterviewCoach = () => {
                 speakText(questionText);
                 
                 if (inputMode === 'voice') {
-                    // Small delay to ensure TTS starts first and mic doesn't pick up beginning of TTS easily
-                    setTimeout(() => startListening(), 800);
+                    // Delay start listening to avoid self-triggering
+                    setTimeout(() => startListening(), 1000); 
                 }
             }
         };
@@ -327,8 +391,9 @@ const InterviewCoach = () => {
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             stopTTS();
         };
-    }, [currentQuestionIndex, interviewData, phase, inputMode, startListening, stopListening, stopTTS, speakText]);
+    }, [currentQuestionIndex, interviewData, phase, inputMode]); 
 
+    // Helper to toggle mic manually
     const toggleListening = () => {
         if (isListening) stopListening();
         else startListening();
@@ -338,85 +403,13 @@ const InterviewCoach = () => {
         const newMode = inputMode === 'voice' ? 'text' : 'voice';
         setInputMode(newMode);
         if (newMode === 'text') stopListening();
-    };
-
-    const handleSubmitAnswer = async () => {
-        if (!interviewData || isSubmittingAnswer) return;
-        
-        stopListening();
-        stopTTS();
-
-        if (!currentAnswer.trim()) return;
-
-        setIsSubmittingAnswer(true);
-
-        try {
-            const currentQuestion = interviewData.questions[currentQuestionIndex];
-            const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
-
-            const response: InterviewResponse = {
-                questionId: currentQuestion.id,
-                answer: currentAnswer,
-                timestamp: Date.now(),
-                duration: questionDuration
-            };
-
-            const updatedResponses = [...interviewData.responses, response];
-            const updatedData = {
-                ...interviewData,
-                responses: updatedResponses,
-                currentQuestionIndex: currentQuestionIndex + 1
-            };
-
-            setInterviewData(updatedData);
-
-            if (currentQuestionIndex + 1 >= interviewData.questions.length) {
-                await completeInterview(updatedData);
-            } else {
-                if (autoNext) {
-                    setIsWaitingForNext(true);
-                    setTimeout(() => {
-                        setCurrentQuestionIndex(currentQuestionIndex + 1);
-                        setCurrentAnswer('');
-                        setIsWaitingForNext(false);
-                    }, 1500);
-                } else {
-                    setIsWaitingForNext(true);
-                }
-            }
-        } catch (error: any) {
-            console.error('Error submitting answer:', error);
-            toast({
-                title: 'Submission Failed',
-                description: error.message || 'Please try again.',
-                variant: 'destructive'
-            });
-            setIsSubmittingAnswer(false);
-        } finally {
-            if (!autoNext) setIsSubmittingAnswer(false);
-            setTimeout(() => setIsSubmittingAnswer(false), 1500);
-        }
+        else if (!isTyping && !isSubmittingAnswer && !isWaitingForNext) startListening();
     };
 
     const handleManualNext = () => {
-        setCurrentQuestionIndex(currentQuestionIndex + 1);
+        setCurrentQuestionIndex(prev => prev + 1);
         setCurrentAnswer('');
         setIsWaitingForNext(false);
-    };
-
-    const handleExit = () => {
-        if (confirm("Exit interview? Progress will be lost.")) {
-            stopListening();
-            stopTTS();
-            navigate('/dashboard');
-        }
-    };
-
-    const handleNewSession = () => {
-        if (confirm("Start new session? Current progress will be lost.")) {
-            stopListening();
-            navigate('/dashboard/interview');
-        }
     };
 
     const completeInterview = async (finalData: InterviewData) => {
@@ -434,7 +427,7 @@ const InterviewCoach = () => {
                 const question = finalData.questions.find(q => q.id === response.questionId);
                 
                 if (question) {
-                    setAnalysisProgress(Math.round(((i) / totalResponses) * 50));
+                    setAnalysisProgress(Math.round(((i) / totalResponses) * 60));
                     const evaluation = await evaluateInterviewResponse(
                         question.question,
                         response.answer,
@@ -446,7 +439,7 @@ const InterviewCoach = () => {
                 }
             }
 
-            setAnalysisProgress(60);
+            setAnalysisProgress(70);
             const dataWithEvaluations = { ...finalData, responses: evaluatedResponses };
             const report = await generateInterviewReport(dataWithEvaluations);
             setAnalysisProgress(100);
@@ -465,6 +458,14 @@ const InterviewCoach = () => {
             setPhase('report');
         } finally {
             setIsGeneratingReport(false);
+        }
+    };
+
+    const handleExit = () => {
+        if (confirm("Exit interview? Progress will be lost.")) {
+            stopListening();
+            stopTTS();
+            navigate('/dashboard');
         }
     };
 
@@ -498,8 +499,19 @@ const InterviewCoach = () => {
     }
 
     const currentQuestion = interviewData!.questions[currentQuestionIndex];
-    const progress = ((currentQuestionIndex + 1) / interviewData!.questions.length) * 100;
+    const progress = ((currentQuestionIndex) / interviewData!.questions.length) * 100;
     const timeRemaining = Math.max(0, (interviewData!.setupData.duration * 60) - elapsedTime);
+
+    // Determine status text
+    let statusText = "Ready";
+    if (isGeneratingReport) statusText = "Generating Report...";
+    else if (isSubmittingAnswer) statusText = "Submitting...";
+    else if (isWaitingForNext) statusText = "Saved. Moving to next...";
+    else if (isTyping) statusText = "Interviewer is asking...";
+    else if (isAiSpeaking) statusText = "Interviewer is speaking...";
+    else if (isListening) statusText = "Listening to you...";
+    else if (inputMode === 'voice') statusText = "Mic is off. Tap to speak.";
+    else statusText = "Waiting for your typed answer.";
 
     return (
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
@@ -509,14 +521,13 @@ const InterviewCoach = () => {
                     <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard">
                         <Home className="h-5 w-5 text-slate-500" />
                     </Button>
-                    <div className="w-px h-8 bg-slate-200"></div>
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
                             <Bot className="h-5 w-5 text-primary" />
                         </div>
                         <div>
                             <h1 className="text-sm font-bold text-slate-900 leading-none">AI Coach</h1>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{interviewData!.setupData.jobRole}</p>
+                            <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{interviewData!.setupData.jobRole}</p>
                         </div>
                     </div>
                 </div>
@@ -528,7 +539,7 @@ const InterviewCoach = () => {
                                 <Settings className="h-5 w-5" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-72 p-4 mr-4">
+                        <PopoverContent className="w-80 p-4 mr-4">
                             <h4 className="font-medium mb-3 text-sm">Session Settings</h4>
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
@@ -537,7 +548,7 @@ const InterviewCoach = () => {
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <Label htmlFor="auto-submit" className="text-sm flex flex-col">
-                                        <span>Auto-Submit Answers</span>
+                                        <span>Auto-Submit Answer</span>
                                         <span className="text-xs text-muted-foreground font-normal">On silence detection</span>
                                     </Label>
                                     <Switch id="auto-submit" checked={autoSubmit} onCheckedChange={(v) => handleSettingChange('autoSubmit', v)} />
@@ -609,11 +620,11 @@ const InterviewCoach = () => {
                             </div>
 
                             <div className="mt-8 text-center space-y-2 z-10">
-                                <h3 className="text-white font-medium text-lg tracking-wide">
-                                    {isAiSpeaking ? "Speaking..." : isListening ? "Listening..." : "Thinking..."}
+                                <h3 className="text-white font-medium text-lg tracking-wide transition-all">
+                                    {statusText}
                                 </h3>
                                 <p className="text-slate-400 text-sm h-5">
-                                    {isWaitingForNext ? "Saving answer..." : isListening ? "Speak clearly..." : ""}
+                                    {inputMode === 'voice' && isListening ? "Speak clearly..." : ""}
                                 </p>
                             </div>
 
@@ -717,9 +728,7 @@ const InterviewCoach = () => {
                                     {currentAnswer.length} chars
                                 </div>
                                 <div className="flex gap-2">
-                                    {/* Submit Button Trigger for Auto-Submit */}
                                     <Button
-                                        id="auto-submit-trigger"
                                         onClick={handleSubmitAnswer}
                                         disabled={!currentAnswer.trim() || isSubmittingAnswer || isWaitingForNext}
                                         className="px-6 h-9 shadow-sm"
