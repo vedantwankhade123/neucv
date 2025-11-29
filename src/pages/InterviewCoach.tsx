@@ -21,6 +21,16 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
 
 type InterviewPhase = 'interview' | 'report';
@@ -58,6 +68,7 @@ const InterviewCoach = () => {
     const [isListening, setIsListening] = useState(false);
     const [isAiSpeaking, setIsAiSpeaking] = useState(false);
     const [audioLevel, setAudioLevel] = useState(0);
+    const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
 
     // Interview flow
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -649,12 +660,15 @@ const InterviewCoach = () => {
         }
     };
 
-    const handleExit = () => {
-        if (confirm("Exit interview? Progress will be lost.")) {
-            stopListening();
-            stopTTS();
-            navigate('/dashboard');
-        }
+    const handleExitClick = () => {
+        setIsExitDialogOpen(true);
+    };
+
+    const confirmExit = () => {
+        stopListening();
+        stopTTS();
+        setIsExitDialogOpen(false);
+        navigate('/dashboard');
     };
 
     useEffect(() => {
@@ -713,7 +727,7 @@ const InterviewCoach = () => {
             {/* Header */}
             <header className="h-16 border-b px-4 lg:px-6 flex items-center justify-between bg-white z-20 shadow-sm relative">
                 <div className="flex items-center gap-4 min-w-[200px]">
-                    <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard" className="hover:bg-slate-100">
+                    <Button variant="ghost" size="icon" onClick={handleExitClick} title="Back to Dashboard" className="hover:bg-slate-100">
                         <Home className="h-5 w-5 text-slate-500" />
                     </Button>
                     <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
@@ -976,6 +990,23 @@ const InterviewCoach = () => {
                     </div>
                 </div>
             )}
+
+            <AlertDialog open={isExitDialogOpen} onOpenChange={setIsExitDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>End Interview Session?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to leave? Your current interview progress will be lost.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmExit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            End Session
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };
