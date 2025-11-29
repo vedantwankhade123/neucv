@@ -742,23 +742,24 @@ const InterviewCoach = () => {
                                 />
                             </div>
 
-                            {/* Center Icon Overlay */}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20">
-                                {isListening ? (
-                                    <Mic className="h-8 w-8 text-white/90 animate-pulse" />
-                                ) : isAiSpeaking ? (
-                                    <Volume2 className="h-8 w-8 text-white/90 animate-bounce" />
-                                ) : (
-                                    <Bot className="h-8 w-8 text-white/50" />
-                                )}
-                            </div>
+                            {/* Center Overlay: Icon + Text inside the orb */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center justify-center text-center w-full pointer-events-none">
+                                {/* Icon */}
+                                <div className="mb-3">
+                                    {isListening ? (
+                                        <Mic className="h-10 w-10 text-white/90 animate-pulse" />
+                                    ) : isAiSpeaking ? (
+                                        <Volume2 className="h-10 w-10 text-white/90 animate-bounce" />
+                                    ) : (
+                                        <Bot className="h-10 w-10 text-white/50" />
+                                    )}
+                                </div>
 
-                            {/* Status Text */}
-                            <div className="absolute bottom-10 left-0 right-0 text-center z-20 px-4">
-                                <h3 className="text-white font-medium text-lg tracking-wide transition-all min-h-[1.75rem]">
+                                {/* Status Text */}
+                                <h3 className="text-white font-medium text-lg tracking-wide transition-all drop-shadow-md">
                                     {statusText}
                                 </h3>
-                                <p className="text-slate-400 text-sm min-h-[1.25rem] opacity-80 mt-1">
+                                <p className="text-slate-300 text-sm opacity-80 mt-1 drop-shadow-md min-h-[20px]">
                                     {inputMode === 'voice' && isListening ? "Speak naturally and clearly" : ""}
                                 </p>
                             </div>
