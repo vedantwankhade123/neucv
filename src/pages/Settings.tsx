@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -14,19 +14,42 @@ import {
 import { deleteAllResumes, getResumes } from '@/lib/resume-storage';
 import { showError, showSuccess } from '@/utils/toast';
 import { UserNav } from '@/components/UserNav';
-import { Database, HelpCircle, Upload, Download, Trash2, Github, Save } from 'lucide-react';
+import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, FastForward } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AutoSaveToggle } from '../components/AutoSaveToggle';
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 import { auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { getUserProfile, addCredits } from '@/lib/user-service';
 import { Sparkles, CreditCard } from 'lucide-react';
-import { useEffect } from 'react';
+import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
 
 const Settings = () => {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [user, loading] = useAuthState(auth);
+  
+  // Settings state
+  const [interviewSettings, setInterviewSettings] = useState({
+    interviewAutoSubmit: true,
+    interviewAutoNext: true,
+    interviewTTS: true
+  });
+
+  useEffect(() => {
+    const settings = getAutoSaveSettings();
+    setInterviewSettings({
+        interviewAutoSubmit: settings.interviewAutoSubmit,
+        interviewAutoNext: settings.interviewAutoNext,
+        interviewTTS: settings.interviewTTS
+    });
+  }, []);
+
+  const handleInterviewSettingChange = (key: string, value: boolean) => {
+    setInterviewSettings(prev => ({ ...prev, [key]: value }));
+    updateInterviewSettings({ [key]: value });
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
@@ -154,6 +177,84 @@ const Settings = () => {
                     </div>
                   </div>
                   <Button variant="outline" disabled>Edit Profile</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Interview Coach Settings */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-medium text-muted-foreground ml-1">Interview Coach</h2>
+            <Card className={cardClasses}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mic className="h-5 w-5 text-muted-foreground" />
+                  Voice & Interaction
+                </CardTitle>
+                <CardDescription>Configure how the AI interviewer interacts with you.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-md">
+                            <Mic className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <Label htmlFor="interview-auto-submit" className="text-base font-medium cursor-pointer">
+                                Auto-Submit on Silence
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                                Automatically submit your answer when you stop speaking (2.5s pause)
+                            </p>
+                        </div>
+                    </div>
+                    <Switch
+                        id="interview-auto-submit"
+                        checked={interviewSettings.interviewAutoSubmit}
+                        onCheckedChange={(checked) => handleInterviewSettingChange('interviewAutoSubmit', checked)}
+                    />
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-md">
+                            <FastForward className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <Label htmlFor="interview-auto-next" className="text-base font-medium cursor-pointer">
+                                Auto-Next Question
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                                Automatically move to the next question after submitting an answer
+                            </p>
+                        </div>
+                    </div>
+                    <Switch
+                        id="interview-auto-next"
+                        checked={interviewSettings.interviewAutoNext}
+                        onCheckedChange={(checked) => handleInterviewSettingChange('interviewAutoNext', checked)}
+                    />
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-md">
+                            <Volume2 className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <Label htmlFor="interview-tts" className="text-base font-medium cursor-pointer">
+                                Read Questions Aloud
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                                Use Text-to-Speech to read interview questions to you
+                            </p>
+                        </div>
+                    </div>
+                    <Switch
+                        id="interview-tts"
+                        checked={interviewSettings.interviewTTS}
+                        onCheckedChange={(checked) => handleInterviewSettingChange('interviewTTS', checked)}
+                    />
                 </div>
               </CardContent>
             </Card>
