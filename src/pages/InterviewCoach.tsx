@@ -584,7 +584,29 @@ const InterviewCoach = () => {
             setInterviewData(completedData);
             setPhase('report');
         } catch (error) {
-            console.error(error);
+            console.error('Report generation failed:', error);
+            toast({
+                title: "Report Generation Failed",
+                description: "Could not generate full analysis. Showing transcript only.",
+                variant: "destructive"
+            });
+            
+            // Create minimal fallback report to prevent crashes
+            const fallbackReport = {
+                overallScore: 0,
+                strengths: ["Analysis unavailable"],
+                areasForImprovement: ["Analysis unavailable"],
+                recommendations: ["Please review the transcript below"],
+                performanceByCategory: []
+            };
+
+            setInterviewData(prev => prev ? ({
+                ...prev,
+                endTime: Date.now(),
+                status: 'completed',
+                report: fallbackReport
+            }) : null);
+            
             setPhase('report');
         } finally {
             setIsGeneratingReport(false);

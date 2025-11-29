@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { InterviewData } from '@/types/interview';
-import { ArrowLeft, Download, CheckCircle2, AlertCircle, Clock, FileText, BarChart3, Trophy, ArrowUpRight, Target, Sparkles } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle2, AlertCircle, Clock, FileText, BarChart3, Trophy, ArrowUpRight, Target, Sparkles, User, ChevronDown, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/interview-service';
 import { UserNav } from '@/components/UserNav';
@@ -42,13 +42,13 @@ Date: ${new Date(startTime).toLocaleString()}
 Overall Score: ${overallScore}/100
 
 STRENGTHS:
-${report?.strengths.map(s => `- ${s}`).join('\n')}
+${report?.strengths?.map(s => `- ${s}`).join('\n') || 'No strengths analyzed.'}
 
 AREAS FOR IMPROVEMENT:
-${report?.areasForImprovement.map(a => `- ${a}`).join('\n')}
+${report?.areasForImprovement?.map(a => `- ${a}`).join('\n') || 'No improvements analyzed.'}
 
 RECOMMENDATIONS:
-${report?.recommendations.map(r => `- ${r}`).join('\n')}
+${report?.recommendations?.map(r => `- ${r}`).join('\n') || 'No recommendations available.'}
         `.trim();
 
         const blob = new Blob([reportText], { type: 'text/plain' });
@@ -153,13 +153,15 @@ ${report?.recommendations.map(r => `- ${r}`).join('\n')}
                                     <h3 className="font-semibold text-slate-900">Skill Breakdown</h3>
                                 </div>
                                 <div className="space-y-4">
-                                    {report?.performanceByCategory.map((cat, i) => (
+                                    {report?.performanceByCategory?.length ? report.performanceByCategory.map((cat, i) => (
                                         <div key={i} className="flex items-center gap-4">
                                             <span className="text-sm font-medium text-slate-600 w-32 truncate">{cat.category}</span>
                                             <Progress value={cat.score} className="h-2 flex-1 bg-slate-100" indicatorClassName={cn(cat.score >= 80 ? "bg-green-500" : cat.score >= 60 ? "bg-amber-500" : "bg-red-500")} />
                                             <span className={cn("text-sm font-bold w-10 text-right", getScoreColor(cat.score))}>{cat.score}%</span>
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <div className="text-sm text-slate-400 italic">No category data available</div>
+                                    )}
                                 </div>
                             </Card>
                         </div>
@@ -175,12 +177,12 @@ ${report?.recommendations.map(r => `- ${r}`).join('\n')}
                             </CardHeader>
                             <CardContent>
                                 <ul className="space-y-3">
-                                    {report?.strengths.map((item, i) => (
+                                    {report?.strengths?.map((item, i) => (
                                         <li key={i} className="flex gap-3 text-sm text-slate-700 bg-white/60 p-3 rounded-lg border border-green-100/50">
                                             <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
                                             <span className="leading-relaxed">{item}</span>
                                         </li>
-                                    ))}
+                                    )) || <li className="text-sm text-slate-500 italic">Analysis unavailable</li>}
                                 </ul>
                             </CardContent>
                         </Card>
@@ -193,12 +195,12 @@ ${report?.recommendations.map(r => `- ${r}`).join('\n')}
                             </CardHeader>
                             <CardContent>
                                 <ul className="space-y-3">
-                                    {report?.areasForImprovement.map((item, i) => (
+                                    {report?.areasForImprovement?.map((item, i) => (
                                         <li key={i} className="flex gap-3 text-sm text-slate-700 bg-white/60 p-3 rounded-lg border border-amber-100/50">
                                             <ArrowUpRight className="h-5 w-5 text-amber-500 flex-shrink-0" />
                                             <span className="leading-relaxed">{item}</span>
                                         </li>
-                                    ))}
+                                    )) || <li className="text-sm text-slate-500 italic">Analysis unavailable</li>}
                                 </ul>
                             </CardContent>
                         </Card>
@@ -213,14 +215,14 @@ ${report?.recommendations.map(r => `- ${r}`).join('\n')}
                         </CardHeader>
                         <CardContent>
                             <div className="grid gap-3">
-                                {report?.recommendations.map((rec, i) => (
+                                {report?.recommendations?.map((rec, i) => (
                                     <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-sm text-slate-700 flex items-start gap-3">
                                         <div className="bg-white p-1.5 rounded-full shadow-sm text-xs font-bold text-slate-400 border border-slate-100">
                                             {i + 1}
                                         </div>
                                         <p className="mt-0.5 leading-relaxed">{rec}</p>
                                     </div>
-                                ))}
+                                )) || <div className="text-sm text-slate-500 italic">Analysis unavailable</div>}
                             </div>
                         </CardContent>
                     </Card>
@@ -267,7 +269,7 @@ ${report?.recommendations.map(r => `- ${r}`).join('\n')}
                                                         <Sparkles className="h-3 w-3" /> AI Feedback
                                                     </h4>
                                                     <div className="text-sm text-slate-700 leading-relaxed">
-                                                        {resp?.evaluation?.feedback}
+                                                        {resp?.evaluation?.feedback || "Feedback not available."}
                                                     </div>
                                                     {resp?.evaluation?.improvements && resp.evaluation.improvements.length > 0 && (
                                                         <div className="mt-4 bg-amber-50/50 p-3 rounded-lg border border-amber-100">
@@ -296,13 +298,4 @@ ${report?.recommendations.map(r => `- ${r}`).join('\n')}
             </main>
         </div>
     );
-}
-
-function User({ className }: { className?: string }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-        </svg>
-    )
 }
