@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Video, VideoOff, Mic, MicOff, Square, Volume2, Loader2, CheckCircle2, ArrowRight, User, Clock, ChevronRight } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, Square, Volume2, Loader2, CheckCircle2, ArrowRight, User, Clock, ChevronRight, Home, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -221,6 +221,24 @@ const InterviewCoach = () => {
         }
     };
 
+    const handleExit = () => {
+        if (confirm("Are you sure you want to leave? Your progress will be lost.")) {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            navigate('/dashboard');
+        }
+    };
+
+    const handleNewSession = () => {
+        if (confirm("Start a new session? Current progress will be lost.")) {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            navigate('/dashboard/interview');
+        }
+    };
+
     const completeInterview = async (finalData: InterviewData) => {
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
@@ -379,18 +397,39 @@ const InterviewCoach = () => {
             {/* Immersive Header */}
             <header className="bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0 shadow-sm z-20">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                            <Video className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-slate-900 leading-none">Mock Interview</h1>
-                            <p className="text-xs text-muted-foreground font-medium mt-1">{interviewData!.setupData.jobRole}</p>
+                    <div className="flex items-center gap-4">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={handleExit}
+                            className="rounded-full hover:bg-slate-100"
+                            title="Back to Dashboard"
+                        >
+                            <Home className="h-5 w-5 text-slate-500" />
+                        </Button>
+                        <div className="w-px h-8 bg-slate-200"></div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                                <Video className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-bold text-slate-900 leading-none">Mock Interview</h1>
+                                <p className="text-xs text-muted-foreground font-medium mt-1">{interviewData!.setupData.jobRole}</p>
+                            </div>
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-6">
-                        <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-4">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleNewSession}
+                            className="hidden md:flex gap-2 text-slate-600"
+                        >
+                            <PlusCircle className="h-4 w-4" /> New Session
+                        </Button>
+                        
+                        <div className="flex flex-col items-end mx-2">
                             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">Time Remaining</span>
                             <div className={cn(
                                 "flex items-center gap-1.5 font-mono font-bold text-lg leading-none",
