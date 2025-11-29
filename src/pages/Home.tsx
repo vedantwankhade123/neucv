@@ -141,7 +141,7 @@ const Home = () => {
             {/* Interview Coach Card */}
             <div
               className="border-2 border-dashed rounded-2xl hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center gap-4 aspect-[3/2]"
-              onClick={() => navigate('/interview-coach')}
+              onClick={() => navigate('/dashboard/interview')}
             >
               <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                 <MessageCircle className="w-8 h-8 text-purple-600 dark:text-purple-400" />

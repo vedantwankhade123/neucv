@@ -17,6 +17,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Pricing from "./pages/Pricing";
 import ProtectedRoute from "./components/ProtectedRoute";
 import InterviewCoach from "./pages/InterviewCoach";
+import InterviewSetupPage from "./pages/InterviewSetupPage";
 
 
 const queryClient = new QueryClient();
@@ -38,11 +39,14 @@ const App = () => (
               <Editor />
             </ProtectedRoute>
           } />
-          <Route path="/interview-coach" element={
+          
+          {/* Standalone Interview Session Route */}
+          <Route path="/interview-session" element={
             <ProtectedRoute>
               <InterviewCoach />
             </ProtectedRoute>
           } />
+
           <Route element={
             <ProtectedRoute>
               <AppLayout />
@@ -52,6 +56,9 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/templates" element={<Templates />} />
             <Route path="/settings" element={<Settings />} />
+            
+            {/* Interview Setup inside Dashboard Layout */}
+            <Route path="/dashboard/interview" element={<InterviewSetupPage />} />
 
             <Route path="/dashboard/pricing" element={<Pricing />} />
           </Route>

@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PlusCircle, FileText, ArrowUpDown, Loader2, CheckSquare, X, Trash2, MessageCircle } from 'lucide-react';
+import { PlusCircle, FileText, ArrowUpDown, CheckSquare, X, Trash2, MessageCircle } from 'lucide-react';
 import { UserNav } from '@/components/UserNav';
 import { ResumeCard } from '@/components/ResumeCard';
 import { cn } from '@/lib/utils';
@@ -38,13 +38,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, loading, error] = useAuthState(auth);
+  const [user, loading] = useAuthState(auth);
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
       console.log('No user found in Dashboard, redirecting to login');
-      navigate('/login'); // Optional: Redirect if not logged in
+      navigate('/login'); 
     } else {
       console.log('User found in Dashboard:', user.email, user.displayName);
     }
@@ -69,8 +69,6 @@ const Dashboard = () => {
     setIsLoading(true);
     console.log('🔍 Fetching projects for user:', user.uid, user.email);
     try {
-      // Fetch Resumes (Firestore + LocalStorage fallback handled in service/storage if needed, but here we mix)
-      // For now, let's stick to the existing pattern: Firestore for resumes if logged in
       const fetchedResumes = await getUserResumesFromFirestore(user.uid);
       console.log('📄 Fetched resumes:', fetchedResumes.length, fetchedResumes);
 
@@ -295,7 +293,7 @@ const Dashboard = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={() => navigate('/interview-coach')} variant="outline" className="shadow-sm h-8 text-xs">
+            <Button onClick={() => navigate('/dashboard/interview')} variant="outline" className="shadow-sm h-8 text-xs">
               <MessageCircle className="mr-2 h-3 w-3" />
               <span className="hidden sm:inline">Interview Coach</span>
               <span className="sm:hidden">Interview</span>

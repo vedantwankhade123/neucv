@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 const navItems = [
   { to: "/home", icon: Home, label: "Home" },
   { to: "/dashboard", icon: LayoutGrid, label: "My Projects", end: true },
-  { to: "/interview-coach", icon: Bot, label: "Interview Coach" },
+  { to: "/dashboard/interview", icon: Bot, label: "Interview Coach" },
   { to: "/templates", icon: FilePlus, label: "Templates" },
   { to: "/dashboard/pricing", icon: CreditCard, label: "Plans & Pricing" },
   { to: "/settings", icon: Settings, label: "Settings" },

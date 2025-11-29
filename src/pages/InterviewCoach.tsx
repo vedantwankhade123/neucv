@@ -1,44 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Video, VideoOff, Mic, MicOff, Square, Volume2, VolumeX, Loader2, CheckCircle2, Timer, ArrowRight, User } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Video, VideoOff, Mic, MicOff, Square, Volume2, Loader2, CheckCircle2, ArrowRight, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { InterviewSetup } from '@/components/InterviewSetup';
 import { InterviewReport } from '@/components/InterviewReport';
-import { InterviewData, InterviewQuestion, InterviewResponse, InterviewSetupData } from '@/types/interview';
-import { generateInterviewQuestions, evaluateInterviewResponse, generateInterviewReport } from '@/lib/gemini';
+import { InterviewData, InterviewResponse } from '@/types/interview';
+import { evaluateInterviewResponse, generateInterviewReport } from '@/lib/gemini';
 import { calculatePerformanceScore, formatDuration } from '@/lib/interview-service';
 import { useToast } from '@/hooks/use-toast';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '@/lib/firebase';
-import { UserNav } from '@/components/UserNav';
 import { Badge } from '@/components/ui/badge';
 
-type InterviewPhase = 'setup' | 'interview' | 'report';
+type InterviewPhase = 'interview' | 'report';
 
 const InterviewCoach = () => {
     const navigate = useNavigate();
-    const [user] = useAuthState(auth);
+    const location = useLocation();
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
     const timerIntervalRef = useRef<number | null>(null);
     const recognitionRef = useRef<any>(null);
 
-    // Phase management
-    const [phase, setPhase] = useState<InterviewPhase>('setup');
+    // Initial state from location
     const [interviewData, setInterviewData] = useState<InterviewData | null>(null);
+    const [phase, setPhase] = useState<InterviewPhase>('interview');
 
     // Media controls
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [isVideoOn, setIsVideoOn] = useState(false);
     const [isAudioOn, setIsAudioOn] = useState(true);
-    const [isSpeakerOn, setIsSpeakerOn] = useState(true);
     const [isListening, setIsListening] = useState(false);
 
     // Interview state
-    const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [currentAnswer, setCurrentAnswer] = useState('');
     const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
@@ -46,6 +40,20 @@ const InterviewCoach = () => {
     const [questionStartTime, setQuestionStartTime] = useState(0);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState(0);
+
+    // Initialize data from navigation state
+    useEffect(() => {
+        const data = location.state?.interviewData as InterviewData;
+        if (data) {
+            setInterviewData(data);
+            setQuestionStartTime(Date.now());
+            // Auto-start video
+            toggleVideo();
+        } else {
+            // Redirect to setup if no data
+            navigate('/dashboard/interview');
+        }
+    }, [location.state, navigate]);
 
     // Start/stop video stream
     const toggleVideo = async () => {
@@ -84,10 +92,6 @@ const InterviewCoach = () => {
             });
         }
         setIsAudioOn(!isAudioOn);
-    };
-
-    const toggleSpeaker = () => {
-        setIsSpeakerOn(!isSpeakerOn);
     };
 
     // Initialize Speech Recognition
@@ -139,58 +143,8 @@ const InterviewCoach = () => {
                 setIsListening(true);
             } catch (e) {
                 console.error("Error starting speech recognition:", e);
-                // Sometimes it throws if already started
                 setIsListening(true);
             }
-        }
-    };
-
-    // Setup completion handler
-    const handleSetupComplete = async (setupData: InterviewSetupData) => {
-        setIsGeneratingQuestions(true);
-
-        try {
-            // Generate AI questions
-            const questions: InterviewQuestion[] = await generateInterviewQuestions(
-                setupData.resumeText,
-                setupData.jobRole,
-                setupData.numQuestions,
-                setupData.language
-            );
-
-            // Initialize interview data
-            const newInterviewData: InterviewData = {
-                id: `interview-${Date.now()}`,
-                userId: user?.uid,
-                setupData,
-                questions,
-                responses: [],
-                startTime: Date.now(),
-                currentQuestionIndex: 0,
-                status: 'in-progress'
-            };
-
-            setInterviewData(newInterviewData);
-            setCurrentQuestionIndex(0);
-            setQuestionStartTime(Date.now());
-            setPhase('interview');
-
-            // Auto-start video if possible
-            toggleVideo();
-
-            toast({
-                title: 'Interview Started',
-                description: `${questions.length} questions generated. Good luck!`
-            });
-        } catch (error: any) {
-            console.error('Error generating questions:', error);
-            toast({
-                title: 'Failed to Generate Questions',
-                description: error.message || 'Please try again.',
-                variant: 'destructive'
-            });
-        } finally {
-            setIsGeneratingQuestions(false);
         }
     };
 
@@ -198,7 +152,6 @@ const InterviewCoach = () => {
     const handleSubmitAnswer = async () => {
         if (!interviewData) return;
         
-        // Stop listening if active
         if (isListening) {
             toggleListening();
         }
@@ -218,7 +171,7 @@ const InterviewCoach = () => {
             const currentQuestion = interviewData.questions[currentQuestionIndex];
             const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
 
-            // Create response object WITHOUT evaluation (evaluation happens at the end)
+            // Create response object (evaluation deferred)
             const response: InterviewResponse = {
                 questionId: currentQuestion.id,
                 answer: currentAnswer,
@@ -226,7 +179,6 @@ const InterviewCoach = () => {
                 duration: questionDuration
             };
 
-            // Update interview data
             const updatedResponses = [...interviewData.responses, response];
             const updatedData = {
                 ...interviewData,
@@ -236,16 +188,13 @@ const InterviewCoach = () => {
 
             setInterviewData(updatedData);
 
-            // Check if interview is complete
             if (currentQuestionIndex + 1 >= interviewData.questions.length) {
                 await completeInterview(updatedData);
             } else {
-                // Move to next question
                 setCurrentQuestionIndex(currentQuestionIndex + 1);
                 setCurrentAnswer('');
                 setQuestionStartTime(Date.now());
 
-                // Removed score toast - strictly no feedback during interview
                 toast({
                     title: 'Answer Saved',
                     description: 'Moving to next question...'
@@ -263,7 +212,6 @@ const InterviewCoach = () => {
         }
     };
 
-    // End interview early
     const handleEndInterviewEarly = async () => {
         if (!interviewData) return;
         
@@ -273,7 +221,6 @@ const InterviewCoach = () => {
         }
     };
 
-    // Complete interview and generate report
     const completeInterview = async (finalData: InterviewData) => {
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
@@ -285,7 +232,6 @@ const InterviewCoach = () => {
         setAnalysisProgress(0);
 
         try {
-            // 1. Batch Evaluate all answers
             const totalResponses = finalData.responses.length;
             const evaluatedResponses: InterviewResponse[] = [];
 
@@ -294,7 +240,7 @@ const InterviewCoach = () => {
                 const question = finalData.questions.find(q => q.id === response.questionId);
                 
                 if (question) {
-                    setAnalysisProgress(Math.round(((i) / totalResponses) * 50)); // First 50% is individual evaluation
+                    setAnalysisProgress(Math.round(((i) / totalResponses) * 50));
                     
                     const evaluation = await evaluateInterviewResponse(
                         question.question,
@@ -313,7 +259,6 @@ const InterviewCoach = () => {
 
             setAnalysisProgress(60);
 
-            // 2. Generate Final Report with evaluated data
             const dataWithEvaluations = {
                 ...finalData,
                 responses: evaluatedResponses
@@ -345,11 +290,19 @@ const InterviewCoach = () => {
                 variant: 'destructive'
             });
 
-            // Fallback: show what we have
+            const fallbackReport = {
+                overallScore: calculatePerformanceScore(finalData.responses),
+                strengths: ['Completed the interview'],
+                areasForImprovement: ['Report generation failed'],
+                recommendations: ['Try again later'],
+                performanceByCategory: []
+            };
+
             setInterviewData({
                 ...finalData,
                 endTime: Date.now(),
-                status: 'completed'
+                status: 'completed',
+                report: fallbackReport
             });
             setPhase('report');
         } finally {
@@ -357,14 +310,13 @@ const InterviewCoach = () => {
         }
     };
 
-    // Timer for elapsed time
+    // Timer
     useEffect(() => {
         if (phase === 'interview' && interviewData) {
             timerIntervalRef.current = window.setInterval(() => {
                 const elapsed = Math.floor((Date.now() - interviewData.startTime) / 1000);
                 setElapsedTime(elapsed);
 
-                // Check if time limit is reached
                 const timeLimit = interviewData.setupData.duration * 60;
                 if (elapsed >= timeLimit) {
                     handleTimeUp();
@@ -382,7 +334,7 @@ const InterviewCoach = () => {
     const handleTimeUp = () => {
         toast({
             title: 'Time Up!',
-            description: 'Interview time limit reached. Submitting answers...',
+            description: 'Interview time limit reached.',
             variant: 'destructive'
         });
         if (interviewData) {
@@ -390,7 +342,7 @@ const InterviewCoach = () => {
         }
     };
 
-    // Cleanup on unmount
+    // Cleanup
     useEffect(() => {
         return () => {
             if (stream) {
@@ -405,72 +357,26 @@ const InterviewCoach = () => {
         };
     }, [stream]);
 
-    // Render based on phase
-    if (phase === 'setup') {
-        if (isGeneratingQuestions) {
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-white">
-                    <Card className="p-8 text-center max-w-md shadow-2xl border-none">
-                        <div className="relative mb-6 mx-auto w-20 h-20 flex items-center justify-center">
-                            <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-pulse"></div>
-                            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                        </div>
-                        <h2 className="text-2xl font-bold mb-3 text-slate-900">Preparing Your Interview</h2>
-                        <p className="text-muted-foreground text-sm leading-relaxed">
-                            Our AI is analyzing your resume and generating a tailored set of questions for your role.
-                        </p>
-                    </Card>
-                </div>
-            );
-        }
-
-        return (
-            <div className="min-h-screen bg-slate-50 flex flex-col">
-                <header className="bg-white border-b px-6 py-4 flex-shrink-0">
-                    <div className="max-w-7xl mx-auto flex items-center justify-between">
-                        <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-                        </Button>
-                        <UserNav />
-                    </div>
-                </header>
-                <div className="flex-grow flex items-center justify-center p-6">
-                    <InterviewSetup
-                        onComplete={handleSetupComplete}
-                        onCancel={() => navigate('/dashboard')}
-                    />
-                </div>
-            </div>
-        );
-    }
+    if (!interviewData && phase === 'interview') return null;
 
     if (phase === 'report' && interviewData) {
         return (
             <InterviewReport
                 interviewData={interviewData}
-                onNewInterview={() => {
-                    setPhase('setup');
-                    setInterviewData(null);
-                    setCurrentQuestionIndex(0);
-                    setCurrentAnswer('');
-                    setElapsedTime(0);
-                }}
+                onNewInterview={() => navigate('/dashboard/interview')}
                 onBackToDashboard={() => navigate('/dashboard')}
             />
         );
     }
 
-    // Interview phase UI
-    if (!interviewData) return null;
-
-    const currentQuestion = interviewData.questions[currentQuestionIndex];
-    const progress = ((currentQuestionIndex + 1) / interviewData.questions.length) * 100;
-    const timeLimit = interviewData.setupData.duration * 60;
+    const currentQuestion = interviewData!.questions[currentQuestionIndex];
+    const progress = ((currentQuestionIndex + 1) / interviewData!.questions.length) * 100;
+    const timeLimit = interviewData!.setupData.duration * 60;
     const timeRemaining = Math.max(0, timeLimit - elapsedTime);
 
     return (
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
-            {/* Immersive Header */}
+            {/* Header */}
             <header className="bg-white border-b px-6 py-3 flex-shrink-0 shadow-sm z-10">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -479,7 +385,7 @@ const InterviewCoach = () => {
                         </div>
                         <div>
                             <h1 className="text-lg font-bold text-slate-900 leading-tight">Mock Interview</h1>
-                            <p className="text-xs text-muted-foreground font-medium">{interviewData.setupData.jobRole}</p>
+                            <p className="text-xs text-muted-foreground font-medium">{interviewData!.setupData.jobRole}</p>
                         </div>
                     </div>
                     
@@ -501,12 +407,11 @@ const InterviewCoach = () => {
                 </div>
             </header>
 
-            {/* Main Workspace */}
+            {/* Main Content */}
             <main className="flex-grow p-6 overflow-y-auto">
                 <div className="max-w-7xl mx-auto h-full flex flex-col">
-                    {/* Progress */}
                     <div className="mb-6 flex items-center justify-between bg-white p-3 rounded-xl border shadow-sm">
-                        <span className="text-sm font-semibold text-slate-700">Question {currentQuestionIndex + 1} of {interviewData.questions.length}</span>
+                        <span className="text-sm font-semibold text-slate-700">Question {currentQuestionIndex + 1} of {interviewData!.questions.length}</span>
                         <div className="flex-1 mx-6 h-2 bg-slate-100 rounded-full overflow-hidden">
                             <div 
                                 className="h-full bg-primary transition-all duration-500 ease-out rounded-full" 
@@ -517,7 +422,7 @@ const InterviewCoach = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow min-h-0">
-                        {/* Left Panel: Question & Answer */}
+                        {/* Question Panel */}
                         <div className="flex flex-col gap-4 h-full">
                             <Card className="p-6 bg-white border-l-4 border-l-primary shadow-md">
                                 <div className="flex items-center gap-2 mb-3">
@@ -587,7 +492,7 @@ const InterviewCoach = () => {
                             </Card>
                         </div>
 
-                        {/* Right Panel: Video Preview */}
+                        {/* Video Panel */}
                         <div className="flex flex-col h-full">
                             <Card className="flex-grow bg-slate-900 rounded-2xl overflow-hidden shadow-xl border-slate-800 relative group">
                                 <video
@@ -609,7 +514,6 @@ const InterviewCoach = () => {
                                     </div>
                                 )}
 
-                                {/* Camera Controls Overlay */}
                                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                     <div className="flex items-center justify-center gap-4">
                                         <Button
@@ -656,7 +560,7 @@ const InterviewCoach = () => {
                 </div>
             </main>
 
-            {/* Loading Overlay */}
+            {/* Analysis Overlay */}
             {isGeneratingReport && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 animate-in fade-in duration-300">
                     <Card className="p-10 text-center max-w-md shadow-2xl border-none bg-white/95">
