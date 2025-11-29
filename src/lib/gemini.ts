@@ -105,8 +105,22 @@ export const generateContent = async (prompt: string, preferredModel: string = '
   throw new Error('Failed to generate content. Unable to find a supported Gemini model for your API key/region.');
 };
 
-export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName?: string) => {
-  const expText = experience.map(e => `${e.role} at ${e.company}`).join(', ');
+export const generateResumeSummary = async (
+  jobTitle: string, 
+  experience: any[] | string, 
+  education: any[], 
+  skills: string[], 
+  achievements: string = '',
+  tone: string = 'professional',
+  modelName?: string
+) => {
+  let expText = '';
+  if (Array.isArray(experience)) {
+    expText = experience.map(e => `${e.role} at ${e.company}`).join(', ');
+  } else {
+    expText = experience;
+  }
+
   const skillsText = skills.join(', ');
   
   const prompt = `You are an expert executive resume writer. Write a compelling, high-impact professional summary for a ${jobTitle}.
@@ -114,6 +128,8 @@ export const generateResumeSummary = async (jobTitle: string, experience: any[],
   Candidate Profile:
   - Experience: ${expText}
   - Core Skills: ${skillsText}
+  - Key Achievements: ${achievements}
+  - Desired Tone: ${tone}
   
   Guidelines:
   - Write in the first person (implied "I"), do not use pronouns like "I", "me", "my".

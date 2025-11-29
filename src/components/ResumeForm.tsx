@@ -115,13 +115,13 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
     setIsSummaryDialogOpen(false);
     try {
-      // Use job role from resumeData.title if not provided in dialog, or use dialog value
       const summary = await generateResumeSummary(
-        jobTitle,
+        data.jobTitle || resumeData.title,
         data.experience || resumeData.experience,
         resumeData.education,
         resumeData.skills,
-        undefined // Use default model
+        data.achievements,
+        data.tone
       );
       setResumeData(prev => ({ ...prev, summary }));
       toast({ title: "Summary Generated", description: "AI analyzed your resume and generated a professional summary." });
