@@ -45,6 +45,7 @@ const InterviewCoach = () => {
     const [elapsedTime, setElapsedTime] = useState(0);
     const [questionStartTime, setQuestionStartTime] = useState(0);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+    const [analysisProgress, setAnalysisProgress] = useState(0);
 
     // Start/stop video stream
     const toggleVideo = async () => {
@@ -217,20 +218,12 @@ const InterviewCoach = () => {
             const currentQuestion = interviewData.questions[currentQuestionIndex];
             const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
 
-            // Evaluate the answer using AI
-            const evaluation = await evaluateInterviewResponse(
-                currentQuestion.question,
-                currentAnswer,
-                interviewData.setupData.language
-            );
-
-            // Create response object
+            // Create response object WITHOUT evaluation (evaluation happens at the end)
             const response: InterviewResponse = {
                 questionId: currentQuestion.id,
                 answer: currentAnswer,
                 timestamp: Date.now(),
-                duration: questionDuration,
-                evaluation
+                duration: questionDuration
             };
 
             // Update interview data
@@ -252,9 +245,10 @@ const InterviewCoach = () => {
                 setCurrentAnswer('');
                 setQuestionStartTime(Date.now());
 
+                // Removed score toast - strictly no feedback during interview
                 toast({
-                    title: 'Answer Recorded',
-                    description: `Feedback score: ${evaluation.score}/100`
+                    title: 'Answer Saved',
+                    description: 'Moving to next question...'
                 });
             }
         } catch (error: any) {
@@ -273,7 +267,7 @@ const InterviewCoach = () => {
     const handleEndInterviewEarly = async () => {
         if (!interviewData) return;
         
-        if (confirm("Are you sure you want to end the interview early? A report will be generated for the questions answered so far.")) {
+        if (confirm("Are you sure you want to end the interview early? We will evaluate the questions answered so far.")) {
             if (isListening) toggleListening();
             await completeInterview(interviewData);
         }
@@ -288,45 +282,74 @@ const InterviewCoach = () => {
         }
 
         setIsGeneratingReport(true);
+        setAnalysisProgress(0);
 
         try {
-            const report = await generateInterviewReport(finalData);
-            const completedData: InterviewData = {
+            // 1. Batch Evaluate all answers
+            const totalResponses = finalData.responses.length;
+            const evaluatedResponses: InterviewResponse[] = [];
+
+            for (let i = 0; i < totalResponses; i++) {
+                const response = finalData.responses[i];
+                const question = finalData.questions.find(q => q.id === response.questionId);
+                
+                if (question) {
+                    setAnalysisProgress(Math.round(((i) / totalResponses) * 50)); // First 50% is individual evaluation
+                    
+                    const evaluation = await evaluateInterviewResponse(
+                        question.question,
+                        response.answer,
+                        finalData.setupData.language
+                    );
+                    
+                    evaluatedResponses.push({
+                        ...response,
+                        evaluation
+                    });
+                } else {
+                    evaluatedResponses.push(response);
+                }
+            }
+
+            setAnalysisProgress(60);
+
+            // 2. Generate Final Report with evaluated data
+            const dataWithEvaluations = {
                 ...finalData,
+                responses: evaluatedResponses
+            };
+
+            const report = await generateInterviewReport(dataWithEvaluations);
+            setAnalysisProgress(90);
+
+            const completedData: InterviewData = {
+                ...dataWithEvaluations,
                 endTime: Date.now(),
                 status: 'completed',
                 report
             };
 
+            setAnalysisProgress(100);
             setInterviewData(completedData);
             setPhase('report');
 
             toast({
-                title: 'Interview Complete!',
-                description: `Your overall score: ${report.overallScore}/100`
+                title: 'Analysis Complete',
+                description: 'Your comprehensive interview report is ready.'
             });
         } catch (error: any) {
             console.error('Error generating report:', error);
             toast({
                 title: 'Report Generation Failed',
-                description: 'Showing results without AI report.',
+                description: 'Showing raw results. Please try again later.',
                 variant: 'destructive'
             });
 
-            // Fallback: show report without AI-generated content
-            const fallbackReport = {
-                overallScore: calculatePerformanceScore(finalData.responses),
-                strengths: ['Completed the interview'],
-                areasForImprovement: ['Report generation failed'],
-                recommendations: ['Try again later'],
-                performanceByCategory: []
-            };
-
+            // Fallback: show what we have
             setInterviewData({
                 ...finalData,
                 endTime: Date.now(),
-                status: 'completed',
-                report: fallbackReport
+                status: 'completed'
             });
             setPhase('report');
         } finally {
@@ -359,7 +382,7 @@ const InterviewCoach = () => {
     const handleTimeUp = () => {
         toast({
             title: 'Time Up!',
-            description: 'Interview time limit reached.',
+            description: 'Interview time limit reached. Submitting answers...',
             variant: 'destructive'
         });
         if (interviewData) {
@@ -646,9 +669,17 @@ const InterviewCoach = () => {
                             </div>
                         </div>
                         <h2 className="text-2xl font-bold mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Analyzing Performance</h2>
-                        <p className="text-muted-foreground leading-relaxed">
-                            Our AI is evaluating your responses, checking technical accuracy, and preparing detailed feedback...
+                        <p className="text-muted-foreground leading-relaxed mb-4">
+                            Our AI is evaluating your responses and preparing detailed feedback...
                         </p>
+                        {analysisProgress > 0 && (
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-primary transition-all duration-300"
+                                    style={{ width: `${analysisProgress}%` }}
+                                ></div>
+                            </div>
+                        )}
                     </Card>
                 </div>
             )}
