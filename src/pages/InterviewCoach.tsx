@@ -83,7 +83,7 @@ const InterviewCoach = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // --- Audio Visualizer Logic ---
+    // --- Circular Gradient Visualizer Logic ---
 
     const drawVisualizer = useCallback(() => {
         const canvas = canvasRef.current;
@@ -96,90 +96,70 @@ const InterviewCoach = () => {
         const height = canvas.height;
         const centerX = width / 2;
         const centerY = height / 2;
+        const radius = Math.min(width, height) / 3;
 
         ctx.clearRect(0, 0, width, height);
 
-        // Styling
-        const barWidth = 4;
-        const gap = 3;
-        const barCount = 45; // Increased bar count for wider visualization
-        const maxBarHeight = height * 0.5;
+        // Calculate average audio level
+        let avgLevel = 0;
+        if (analyserRef.current && dataArrayRef.current) {
+            analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+            const sum = dataArrayRef.current.reduce((a, b) => a + b, 0);
+            avgLevel = sum / dataArrayRef.current.length;
+        } else if (isAiSpeaking) {
+            // Simulate levels for AI
+            avgLevel = (Math.sin(Date.now() / 100) + 1) * 30 + 40;
+        }
 
-        // Colors
-        let gradient = ctx.createLinearGradient(0, centerY - maxBarHeight, 0, centerY + maxBarHeight);
+        const scale = 1 + (avgLevel / 255) * 0.5;
+
+        // Base Circle
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius * scale, 0, 2 * Math.PI);
+        
+        // Gradient definition
+        const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.5, centerX, centerY, radius * 2);
         
         if (isListening) {
-            gradient.addColorStop(0, '#86efac'); // Light green
-            gradient.addColorStop(0.5, '#22c55e'); // Green
-            gradient.addColorStop(1, '#86efac');
+            gradient.addColorStop(0, 'rgba(74, 222, 128, 0.8)'); // Green core
+            gradient.addColorStop(0.6, 'rgba(34, 197, 94, 0.4)'); // Green mid
+            gradient.addColorStop(1, 'rgba(34, 197, 94, 0)'); // Transparent edge
         } else if (isAiSpeaking) {
-            gradient.addColorStop(0, '#67e8f9'); // Cyan
-            gradient.addColorStop(0.5, '#06b6d4'); // Darker Cyan
-            gradient.addColorStop(1, '#67e8f9');
+            gradient.addColorStop(0, 'rgba(103, 232, 249, 0.8)'); // Cyan core
+            gradient.addColorStop(0.6, 'rgba(6, 182, 212, 0.4)'); // Cyan mid
+            gradient.addColorStop(1, 'rgba(6, 182, 212, 0)'); // Transparent edge
         } else {
-            gradient.addColorStop(0, '#cbd5e1'); // Slate 300
-            gradient.addColorStop(0.5, '#64748b'); // Slate 500
-            gradient.addColorStop(1, '#cbd5e1');
+            gradient.addColorStop(0, 'rgba(148, 163, 184, 0.3)'); // Slate core
+            gradient.addColorStop(1, 'rgba(148, 163, 184, 0)'); // Transparent edge
         }
 
         ctx.fillStyle = gradient;
+        ctx.fill();
 
-        // Get Audio Data
-        let frequencyData: number[] = new Array(barCount).fill(0);
-
-        if (isListening && analyserRef.current && dataArrayRef.current) {
-            analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-            // Downsample frequency data to barCount
-            const step = Math.floor(dataArrayRef.current.length / barCount);
-            for (let i = 0; i < barCount; i++) {
-                // Average out values for smoother bars
-                let sum = 0;
-                for(let j = 0; j < step; j++) {
-                    sum += dataArrayRef.current[i * step + j] || 0;
-                }
-                frequencyData[i] = sum / step;
-            }
-        } else if (isAiSpeaking) {
-            // Simulate waveform for AI speech
-            const time = Date.now() / 150;
-            for (let i = 0; i < barCount; i++) {
-                // Sine wave pattern
-                const offset = i - barCount / 2;
-                // Gaussian window to taper edges
-                const window = Math.exp(-0.02 * offset * offset);
-                // Combine sine waves
-                const value = (Math.sin(time + i * 0.5) + Math.sin(time * 2 + i * 0.2)) * 60 + 80;
-                frequencyData[i] = value * window;
-            }
-        } else {
-            // Idle gentle breathing
-            const time = Date.now() / 1500;
-            for (let i = 0; i < barCount; i++) {
-                // Gentle undulation
-                const offset = Math.abs(i - barCount / 2);
-                const value = Math.sin(time + i * 0.1) * 5 + 10 + (20 - offset * 0.5);
-                frequencyData[i] = Math.max(4, value);
-            }
-        }
-
-        // Draw Bars centered
-        const totalWidth = barCount * (barWidth + gap);
-        const startX = (width - totalWidth) / 2;
-
-        for (let i = 0; i < barCount; i++) {
-            const value = frequencyData[i] || 0;
-            const normalizedHeight = (value / 255) * maxBarHeight * 2; // Scale height
-            // Ensure a minimum height for visibility
-            const h = Math.max(normalizedHeight, 4); 
+        // Animated Rings
+        if (isListening || isAiSpeaking) {
+            const time = Date.now() / 1000;
+            const ringCount = 3;
             
-            const x = startX + i * (barWidth + gap);
-            const y = centerY - h / 2;
-
-            // Rounded bars
-            ctx.beginPath();
-            ctx.roundRect(x, y, barWidth, h, 20); // Full round radius
-            ctx.fill();
+            for (let i = 0; i < ringCount; i++) {
+                const ringScale = (time + i * 0.5) % 2; // Loop from 0 to 2
+                const alpha = Math.max(0, 1 - ringScale / 1.5); // Fade out
+                
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius * ringScale, 0, 2 * Math.PI);
+                ctx.strokeStyle = isListening 
+                    ? `rgba(74, 222, 128, ${alpha})` 
+                    : `rgba(103, 232, 249, ${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
         }
+
+        // Inner Icon Circle Background
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius * 0.6, 0, 2 * Math.PI);
+        ctx.fillStyle = isListening ? '#22c55e' : isAiSpeaking ? '#06b6d4' : '#475569';
+        ctx.fill();
 
         animationFrameRef.current = requestAnimationFrame(drawVisualizer);
     }, [isListening, isAiSpeaking]);
@@ -406,7 +386,6 @@ const InterviewCoach = () => {
     }, [phase]);
 
     // --- Critical: Question Typing Effect ---
-    // Depend on Question ID so it only runs when question changes
     const currentQuestion = interviewData?.questions[currentQuestionIndex];
     const currentQuestionId = currentQuestion?.id;
 
@@ -705,9 +684,19 @@ const InterviewCoach = () => {
                                 <canvas 
                                     ref={canvasRef} 
                                     width={400} 
-                                    height={200}
-                                    className="w-full h-full object-contain opacity-90 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                                    height={400}
+                                    className="w-full h-full object-contain opacity-90 drop-shadow-[0_0_25px_rgba(255,255,255,0.15)]"
                                 />
+                                {/* Center Icon Overlay */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                                    {isListening ? (
+                                        <Mic className="h-10 w-10 text-white animate-pulse" />
+                                    ) : isAiSpeaking ? (
+                                        <Volume2 className="h-10 w-10 text-white animate-bounce" />
+                                    ) : (
+                                        <Bot className="h-10 w-10 text-white/50" />
+                                    )}
+                                </div>
                             </div>
 
                             {/* Status Text & Hints */}
@@ -809,12 +798,18 @@ const InterviewCoach = () => {
                                             size="icon"
                                             variant={isListening ? "destructive" : "default"}
                                             className={cn(
-                                                "rounded-full h-14 w-14 shadow-xl transition-all duration-300",
-                                                isListening ? "animate-pulse ring-4 ring-red-100 scale-110 bg-red-500 hover:bg-red-600" : "hover:scale-105 bg-slate-900 hover:bg-slate-800"
+                                                "rounded-full h-16 w-16 shadow-2xl transition-all duration-300 border-4 border-white/50",
+                                                isListening 
+                                                    ? "animate-[pulse_1.5s_infinite] ring-4 ring-red-500/30 bg-red-500 hover:bg-red-600 scale-110" 
+                                                    : "bg-slate-900 hover:bg-slate-800 hover:scale-105"
                                             )}
                                             onClick={toggleListening}
                                         >
-                                            {isListening ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                                            {isListening ? (
+                                                <MicOff className="h-7 w-7 text-white" />
+                                            ) : (
+                                                <Mic className="h-7 w-7 text-white" />
+                                            )}
                                         </Button>
                                     </div>
                                 )}
