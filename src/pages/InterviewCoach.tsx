@@ -747,9 +747,9 @@ const InterviewCoach = () => {
                                 {/* Icon */}
                                 <div className="mb-3">
                                     {isListening ? (
-                                        <Mic className="h-10 w-10 text-white/90 animate-pulse" />
+                                        <Mic className="h-10 w-10 text-white/90" />
                                     ) : isAiSpeaking ? (
-                                        <Volume2 className="h-10 w-10 text-white/90 animate-bounce" />
+                                        <Volume2 className="h-10 w-10 text-white/90" />
                                     ) : (
                                         <Bot className="h-10 w-10 text-white/50" />
                                     )}
