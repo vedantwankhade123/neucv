@@ -46,56 +46,76 @@ const cleanAndParseJSON = (text: string) => {
   }
 };
 
-export const generateContent = async (prompt: string, modelName: string = 'gemini-1.5-flash-001') => {
+// List of models to try in order of preference/speed/cost
+const MODEL_FALLBACKS = [
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-001',
+  'gemini-1.5-flash-002',
+  'gemini-1.5-pro',
+  'gemini-1.0-pro',
+  'gemini-pro'
+];
+
+export const generateContent = async (prompt: string, preferredModel: string = 'gemini-1.5-flash') => {
   if (!API_KEY) {
     throw new Error('Gemini API key is not configured. Please add VITE_GEMINI_API_KEY to your .env file and RESTART the dev server.');
   }
 
-  try {
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    return response.text();
-  } catch (error: any) {
-    // Check for 404 or not found errors and try fallback
-    if (modelName !== 'gemini-pro' && (error.message?.includes('404') || error.message?.includes('not found'))) {
-      console.warn(`Model ${modelName} not found, attempting fallback to gemini-pro`);
-      try {
-        const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-pro' });
-        const result = await fallbackModel.generateContent(prompt);
-        return result.response.text();
-      } catch (fallbackError: any) {
-        console.error('Fallback model also failed:', fallbackError);
-        throw new Error(`Failed to generate content. Primary model ${modelName} not found, and fallback failed.`);
-      }
-    }
+  // Create a unique list starting with preferred model
+  const modelsToTry = [...new Set([preferredModel, ...MODEL_FALLBACKS])];
+  
+  let lastError: any = null;
 
-    console.error('Gemini API Error Details:', {
-      message: error.message,
-      status: error.status,
-      statusText: error.statusText,
-      fullError: error
-    });
-    throw new Error(error?.message || 'Failed to generate content. Please check your API key and quota.');
+  for (const modelName of modelsToTry) {
+    try {
+      // console.log(`Attempting generation with model: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
+      
+      // If we get here, it worked
+      // console.log(`Success with model: ${modelName}`);
+      return text;
+    } catch (error: any) {
+      lastError = error;
+      
+      // Only continue if it's a 404 (Not Found) or 400 (Invalid Argument/Not Supported)
+      // For 403 (Permission/Quota), we should probably stop
+      const isModelError = error.message?.includes('404') || 
+                           error.message?.includes('not found') || 
+                           error.message?.includes('not supported');
+                           
+      if (!isModelError) {
+        console.error(`Gemini API Error (${modelName}):`, error);
+        throw new Error(error?.message || 'Gemini API request failed.');
+      }
+      
+      console.warn(`Model ${modelName} failed, trying next...`);
+    }
   }
+
+  // If we exhausted all models
+  console.error('All Gemini models failed. Last error:', lastError);
+  throw new Error('Failed to generate content. Unable to find a supported Gemini model for your API key/region.');
 };
 
-export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName: string = 'gemini-1.5-flash-001') => {
+export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName?: string) => {
   const prompt = `Create a professional summary for a ${jobTitle}. Return ONLY the summary text, no markdown, no quotes.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateExperienceDescription = async (role: string, company: string, existingDescription: string = '', resumeContext?: any, startDate?: string, endDate?: string, modelName: string = 'gemini-1.5-flash-001') => {
+export const generateExperienceDescription = async (role: string, company: string, existingDescription: string = '', resumeContext?: any, startDate?: string, endDate?: string, modelName?: string) => {
   const prompt = `Generate professional bullet points for the role of ${role} at ${company}. Return ONLY the bullet points, starting with action verbs. Do not include introductory text.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateSkills = async (jobTitle: string, modelName: string = 'gemini-1.5-flash-001'): Promise<string> => {
+export const generateSkills = async (jobTitle: string, modelName?: string): Promise<string> => {
   const prompt = `List top technical and soft skills for a ${jobTitle}. Return a simple comma-separated list.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateContextAwareSkills = async (resumeData: any, count: number = 6, modelName: string = 'gemini-1.5-flash-001') => {
+export const generateContextAwareSkills = async (resumeData: any, count: number = 6, modelName?: string) => {
   const prompt = `Based on the following resume data, generate ${count} relevant skills. Return ONLY a comma-separated list.
   
   Resume Data:
@@ -104,12 +124,12 @@ export const generateContextAwareSkills = async (resumeData: any, count: number 
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateEducationDescription = async (degree: string, institution: string, keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash-001') => {
+export const generateEducationDescription = async (degree: string, institution: string, keywords: string = '', resumeContext?: any, modelName?: string) => {
   const prompt = `Generate a brief description for an education entry: ${degree} at ${institution}. Include key achievements or coursework if implied. Return ONLY the text.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateCustomSectionContent = async (sectionTitle: string, sectionType: 'text' | 'list' | 'experience', keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash-001') => {
+export const generateCustomSectionContent = async (sectionTitle: string, sectionType: 'text' | 'list' | 'experience', keywords: string = '', resumeContext?: any, modelName?: string) => {
   const prompt = `Generate content for a resume section titled "${sectionTitle}". The format is ${sectionType}. 
   Keywords/Context: ${keywords}
   Return ONLY the content text/bullet points suitable for a resume.`;
@@ -135,7 +155,7 @@ export const processResumeAgentPrompt = async (
   userPrompt: string,
   currentResumeData: any,
   conversationHistory: any[] = [],
-  modelName: string = 'gemini-1.5-flash-001'
+  modelName?: string
 ): Promise<ResumeAgentResponse> => {
   const historyText = conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n');
 
@@ -197,7 +217,7 @@ export const generateInterviewQuestions = async (
   jobRole: string,
   numQuestions: number,
   language: string,
-  modelName: string = 'gemini-1.5-flash-001'
+  modelName?: string
 ) => {
   const languageInstructions = {
     english: 'Generate questions in English.',
@@ -236,7 +256,7 @@ export const evaluateInterviewResponse = async (
   question: string,
   response: string,
   language: string,
-  modelName: string = 'gemini-1.5-flash-001'
+  modelName?: string
 ) => {
   const prompt = `Evaluate this interview response.
   
@@ -263,7 +283,7 @@ Return ONLY a JSON object:
 
 export const generateInterviewReport = async (
   interviewData: any,
-  modelName: string = 'gemini-1.5-flash-001'
+  modelName?: string
 ) => {
   const { setupData, questions, responses } = interviewData;
 
