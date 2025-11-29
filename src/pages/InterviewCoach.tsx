@@ -92,10 +92,10 @@ const InterviewCoach = () => {
         const centerX = width / 2;
         const centerY = height / 2;
         
-        // Base radius for the ring (Keep void in center large)
+        // Base radius for the ring
         const baseRadius = Math.min(width, height) / 3.2;
 
-        // Use full clear to maintain sharp lines like the reference
+        // Clear canvas
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
@@ -104,6 +104,7 @@ const InterviewCoach = () => {
         let volume = 0;
 
         if (isListening && analyserRef.current && dataArrayRef.current) {
+            // Real microphone data
             analyserRef.current.getByteFrequencyData(dataArrayRef.current);
             let sum = 0;
             for (let i = 0; i < 128; i++) {
@@ -112,24 +113,37 @@ const InterviewCoach = () => {
             }
             volume = sum / 128;
         } else if (isAiSpeaking) {
-            // Simulation for AI speaking
+            // Dynamic Simulation for AI speaking (mimics voice patterns)
             const t = Date.now() / 1000;
-            volume = (Math.sin(t * 8) + 1) * 30 + 40; 
+            
+            // Complex envelope to mimic speech syllables (bursty)
+            const rhythm = Math.sin(t * 12); // Fast syllable rhythm
+            const variation = Math.cos(t * 5.5); // Tonal variation
+            const noise = Math.random() * 0.2; // Texture
+            
+            // Resulting amplitude envelope
+            const envelope = (Math.max(0, rhythm * variation) + 0.3 + noise);
+            
+            volume = Math.min(255, envelope * 100); 
+            
             for (let i = 0; i < 128; i++) {
-                // Create moving waves
-                frequencyData[i] = (Math.sin(i * 0.2 + t * 5) + 1) * 60 + 50;
+                // Generate spectral lines that dance
+                const offset = i * 0.15;
+                const wave = Math.sin(offset + t * 15) * Math.cos(offset * 0.5 - t * 8);
+                // Map to frequency data range 0-255
+                frequencyData[i] = Math.max(0, (wave + 1) * 80 * envelope + (Math.random() * 20));
             }
         } else {
-            // Idle state: Subtle breathing
+            // Idle state: Subtle, gentle breathing
             const t = Date.now() / 2000;
-            volume = Math.sin(t) * 5 + 10;
+            volume = Math.sin(t) * 5 + 15;
             for (let i = 0; i < 128; i++) {
-                frequencyData[i] = 10 + Math.random() * 5; 
+                frequencyData[i] = 10 + Math.sin(i * 0.2 + t) * 5 + Math.random() * 5; 
             }
         }
 
-        // Scale effect based on volume
-        const scale = 1 + (volume / 255) * 0.05;
+        // Scale effect based on volume (pumping effect)
+        const scale = 1 + (volume / 255) * 0.08;
 
         ctx.save();
         ctx.translate(centerX, centerY);
@@ -139,42 +153,46 @@ const InterviewCoach = () => {
         const time = Date.now() / 1000;
         ctx.rotate(time * 0.05);
 
-        ctx.globalCompositeOperation = 'screen'; // Additive blending for the "light" look
+        ctx.globalCompositeOperation = 'screen'; // Bright additive blending
 
         // Draw Filaments
-        const particles = 720; // High count for density
+        const particles = 720;
         const angleStep = (Math.PI * 2) / particles;
 
         for (let i = 0; i < particles; i++) {
             const angle = i * angleStep;
             
-            // Map angle to frequency data (mirrored for symmetry)
+            // Map angle to frequency data
             const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
             const freqValue = frequencyData[freqIndex] || 0;
             
-            // Determine Color based on Angle
+            // Brighter Color Logic
+            // Using Cyan (180) <-> Magenta (300) spectrum for a vivid neon look
             const normAngle = (angle / (Math.PI * 2)); 
-            let hue;
-            let saturation = 80;
-            let lightness = 50;
-
             const shiftedAngle = (normAngle + 0.2) % 1.0; 
-
+            
+            let hue;
             if (shiftedAngle < 0.5) {
-                hue = 280 - (shiftedAngle * 2) * 140; 
+                // Transition Magenta (300) -> Cyan (190)
+                hue = 300 - (shiftedAngle * 2) * 110; 
             } else {
-                hue = 140 + ((shiftedAngle - 0.5) * 2) * 140;
+                // Transition Cyan (190) -> Magenta (300)
+                hue = 190 + ((shiftedAngle - 0.5) * 2) * 110;
             }
 
-            lightness += (freqValue / 255) * 30;
-            const alpha = 0.1 + (freqValue / 255) * 0.5;
+            // High Saturation for neon effect
+            const saturation = 100;
+            // Lightness boosts with audio volume for "glowing" effect
+            const lightness = 60 + (freqValue / 255) * 40; 
+            const alpha = 0.2 + (freqValue / 255) * 0.8;
 
             ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1.5; // Slightly thicker for brightness
 
+            // Filament Geometry
             const rStart = baseRadius;
-            const rEnd = baseRadius + 20 + (freqValue / 255) * 60; 
-            const swirl = 0.1 + (freqValue / 255) * 0.1;
+            const rEnd = baseRadius + 15 + (freqValue / 255) * 80; // Longer spikes
+            const swirl = 0.15 + (freqValue / 255) * 0.15; // More dynamic swirl
             
             const x1 = Math.cos(angle) * rStart;
             const y1 = Math.sin(angle) * rStart;
@@ -190,13 +208,14 @@ const InterviewCoach = () => {
             ctx.stroke();
         }
 
-        // Inner rim light
+        // Inner rim light (Brighter)
         ctx.beginPath();
         ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
-        rimGradient.addColorStop(0, 'rgba(74, 222, 128, 0.5)'); // Greenish
-        rimGradient.addColorStop(1, 'rgba(167, 139, 250, 0.5)'); // Purplish
+        // Bright Cyan to Bright Magenta
+        rimGradient.addColorStop(0, 'rgba(6, 182, 212, 0.8)'); // Cyan
+        rimGradient.addColorStop(1, 'rgba(217, 70, 239, 0.8)'); // Fuchsia
         ctx.strokeStyle = rimGradient;
         ctx.stroke();
 
