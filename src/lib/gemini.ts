@@ -75,20 +75,14 @@ export const generateContent = async (prompt: string, preferredModel: string = '
 
   for (const modelName of modelsToTry) {
     try {
-      // console.log(`Attempting generation with model: ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent(prompt);
       const response = result.response;
       const text = response.text();
-      
-      // If we get here, it worked
-      // console.log(`Success with model: ${modelName}`);
       return text;
     } catch (error: any) {
       lastError = error;
       
-      // Only continue if it's a 404 (Not Found) or 400 (Invalid Argument/Not Supported)
-      // 404 often means the model isn't available in the region or for the API key project
       const isModelError = error.message?.includes('404') || 
                            error.message?.includes('not found') || 
                            error.message?.includes('not supported');
@@ -102,10 +96,8 @@ export const generateContent = async (prompt: string, preferredModel: string = '
     }
   }
 
-  // If we exhausted all models
   console.error('All Gemini models failed. Last error:', lastError);
   
-  // Provide a more helpful error message for 404s specifically
   if (lastError?.message?.includes('404')) {
     throw new Error('API Error: Models not found. Please ensure "Generative Language API" is ENABLED in your Google Cloud Console for this API key.');
   }
@@ -114,38 +106,102 @@ export const generateContent = async (prompt: string, preferredModel: string = '
 };
 
 export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName?: string) => {
-  const prompt = `Create a professional summary for a ${jobTitle}. Return ONLY the summary text, no markdown, no quotes.`;
+  const expText = experience.map(e => `${e.role} at ${e.company}`).join(', ');
+  const skillsText = skills.join(', ');
+  
+  const prompt = `You are an expert executive resume writer. Write a compelling, high-impact professional summary for a ${jobTitle}.
+  
+  Candidate Profile:
+  - Experience: ${expText}
+  - Core Skills: ${skillsText}
+  
+  Guidelines:
+  - Write in the first person (implied "I"), do not use pronouns like "I", "me", "my".
+  - Focus on unique value proposition, key achievements, and career trajectory.
+  - Keep it between 3-5 powerful, punchy sentences.
+  - Use strong, active professional language.
+  - Integrate relevant ATS keywords for a ${jobTitle} role.
+  
+  Return ONLY the summary paragraph text. No markdown, no quotes.`;
+  
   return (await generateContent(prompt, modelName)).trim();
 };
 
 export const generateExperienceDescription = async (role: string, company: string, existingDescription: string = '', resumeContext?: any, startDate?: string, endDate?: string, modelName?: string) => {
-  const prompt = `Generate professional bullet points for the role of ${role} at ${company}. Return ONLY the bullet points, starting with action verbs. Do not include introductory text.`;
+  const prompt = `You are a senior resume consultant. Generate 4-6 high-impact, results-oriented bullet points for the role of ${role} at ${company}.
+  
+  Context / Draft: "${existingDescription}"
+  
+  Guidelines:
+  - Start EVERY bullet point with a strong, dynamic action verb (e.g., Spearheaded, Orchestrated, Engineered, Accelerated).
+  - Use the "Action + Result + Metric" formula where possible.
+  - Quantify achievements with numbers, percentages, or concrete metrics (e.g., "Increased revenue by 25%", "Reduced latency by 40%"). If exact numbers aren't known, use plausible placeholders like [X]%.
+  - Focus on accomplishments and business impact, not just responsibilities.
+  - Tailor the language to be highly relevant for a ${role} position.
+  
+  Return ONLY the bullet points as a plain list (using •). Do not include any introductory text or markdown headers.`;
+  
   return (await generateContent(prompt, modelName)).trim();
 };
 
 export const generateSkills = async (jobTitle: string, modelName?: string): Promise<string> => {
-  const prompt = `List top technical and soft skills for a ${jobTitle}. Return a simple comma-separated list.`;
+  const prompt = `Act as an ATS (Applicant Tracking System) expert. List the top 12-15 most critical hard and soft skills for a ${jobTitle}.
+  
+  Guidelines:
+  - Prioritize high-value keywords that recruiters search for.
+  - Include specific tools, technologies, and methodologies relevant to ${jobTitle}.
+  - Balance technical proficiency with essential soft skills (e.g., Leadership, Strategic Planning).
+  
+  Return ONLY a comma-separated list of skills. No categories, no bullet points.`;
+  
   return (await generateContent(prompt, modelName)).trim();
 };
 
 export const generateContextAwareSkills = async (resumeData: any, count: number = 6, modelName?: string) => {
-  const prompt = `Based on the following resume data, generate ${count} relevant skills. Return ONLY a comma-separated list.
+  const prompt = `Based on the detailed resume profile below, extract the top ${count} most impactful skills that will maximize ATS visibility.
   
-  Resume Data:
-  ${JSON.stringify(resumeData).substring(0, 1000)}...
-  `;
+  Resume Profile:
+  Title: ${resumeData.title}
+  Summary: ${resumeData.summary}
+  Experience: ${JSON.stringify(resumeData.experience.map((e: any) => ({ role: e.role, company: e.company, desc: e.description })))}
+  
+  Guidelines:
+  - Identify specific technologies, tools, and competencies mentioned or implied in the experience.
+  - Ensure the skills are standard industry terms.
+  - Exclude generic or weak skills.
+  
+  Return ONLY a comma-separated list of skills.`;
+  
   return (await generateContent(prompt, modelName)).trim();
 };
 
 export const generateEducationDescription = async (degree: string, institution: string, keywords: string = '', resumeContext?: any, modelName?: string) => {
-  const prompt = `Generate a brief description for an education entry: ${degree} at ${institution}. Include key achievements or coursework if implied. Return ONLY the text.`;
+  const prompt = `Generate a concise, professional description for an education entry: ${degree} at ${institution}.
+  
+  Keywords/Focus: ${keywords}
+  
+  Guidelines:
+  - Mention relevant coursework, honors, or key academic achievements if implied by the degree.
+  - Keep it brief (1-2 sentences or 2-3 short bullets).
+  - Focus on academic excellence and relevance to the candidate's career.
+  
+  Return ONLY the text.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
 export const generateCustomSectionContent = async (sectionTitle: string, sectionType: 'text' | 'list' | 'experience', keywords: string = '', resumeContext?: any, modelName?: string) => {
-  const prompt = `Generate content for a resume section titled "${sectionTitle}". The format is ${sectionType}. 
-  Keywords/Context: ${keywords}
-  Return ONLY the content text/bullet points suitable for a resume.`;
+  const prompt = `You are a resume expert. Generate professional content for a resume section titled "${sectionTitle}".
+  
+  Format: ${sectionType}
+  Context/Keywords: ${keywords}
+  
+  Guidelines:
+  - Ensure the tone is professional and consistent with a high-quality resume.
+  - If it's a list, provide relevant items separated by commas or bullets.
+  - If it's text, write a cohesive paragraph or bullet points.
+  - Focus on adding value to the candidate's profile.
+  
+  Return ONLY the content text.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
@@ -172,7 +228,7 @@ export const processResumeAgentPrompt = async (
 ): Promise<ResumeAgentResponse> => {
   const historyText = conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n');
 
-  const prompt = `You are an expert resume writer AI agent. Help the user improve their resume.
+  const prompt = `You are an expert Resume Strategist and Career Coach. Your goal is to help the user build a top-tier, ATS-optimized resume.
   
   Current Resume Data:
   ${JSON.stringify(currentResumeData, null, 2)}
@@ -180,23 +236,29 @@ export const processResumeAgentPrompt = async (
   Conversation History:
   ${historyText}
   
-  User Request: ${userPrompt}
+  User Request: "${userPrompt}"
   
-  Analyze the request.
-  Return a JSON object with this structure:
+  Instructions:
+  1. Analyze the user's request and the current state of the resume.
+  2. If the user asks to write, rewrite, or improve a section, generate high-quality, professional content using action verbs, metrics, and industry keywords.
+  3. If the user provides raw information, format it professionally for a resume.
+  4. If information is missing (e.g., dates, company names) that is critical for a section, ask for clarification in the 'message' field and set 'needsClarification' to true.
+  5. Be helpful, encouraging, and professional.
+  
+  Return a JSON object with this exact structure:
   {
-    "message": "Response to user",
+    "message": "A friendly, professional response to the user, explaining what you did or asking for necessary details.",
     "updates": {
       "personalInfo": {}, 
-      "title": "New Title",
-      "summary": "New Summary",
+      "title": "New Job Title",
+      "summary": "New Professional Summary",
       "experience": [], 
       "education": [],
       "skills": [],
       "customSections": []
     },
     "needsClarification": boolean,
-    "clarificationQuestions": ["Question 1"]
+    "clarificationQuestions": ["Question 1", "Question 2"]
   }
   
   Return ONLY valid JSON.
@@ -239,22 +301,26 @@ export const generateInterviewQuestions = async (
     hindi: 'Generate questions in Hindi language.'
   };
 
-  const prompt = `You are an expert interview coach. Generate ${numQuestions} interview questions based on:
+  const prompt = `You are an expert Senior Technical Recruiter and Hiring Manager. Prepare a rigorous interview question set for a candidate applying for: ${jobRole}.
   
-Resume Text Summary: ${resumeText.substring(0, 1500)}
-Job Role: ${jobRole}
-
-${languageInstructions[language as keyof typeof languageInstructions] || 'Generate in English.'}
-
-Return ONLY a JSON array:
-[
-  {
-    "id": "1",
-    "question": "Question text",
-    "category": "Behavioral/Technical/Situational",
-    "difficulty": "easy/medium/hard"
-  }
-]`;
+  Candidate Resume Context:
+  ${resumeText.substring(0, 2000)}
+  
+  Requirements:
+  - Generate exactly ${numQuestions} questions.
+  - Include a mix of Behavioral (STAR method), Technical (role-specific), and Situational questions.
+  - Tailor questions specifically to the candidate's experience level and the job role.
+  - ${languageInstructions[language as keyof typeof languageInstructions] || 'Generate in English.'}
+  
+  Return ONLY a JSON array with this structure:
+  [
+    {
+      "id": "1",
+      "question": "The actual question text",
+      "category": "Behavioral" | "Technical" | "Situational",
+      "difficulty": "easy" | "medium" | "hard"
+    }
+  ]`;
 
   try {
     const response = await generateContent(prompt, modelName);
@@ -271,19 +337,25 @@ export const evaluateInterviewResponse = async (
   language: string,
   modelName?: string
 ) => {
-  const prompt = `Evaluate this interview response.
+  const prompt = `Act as an expert Hiring Manager. Evaluate the following interview response.
   
-Question: ${question}
-Response: ${response}
-Language: ${language}
-
-Return ONLY a JSON object:
-{
-  "score": number (0-100),
-  "feedback": "Feedback text",
-  "strengths": ["string"],
-  "improvements": ["string"]
-}`;
+  Question: "${question}"
+  Candidate Response: "${response}"
+  Language Context: ${language}
+  
+  Evaluation Criteria:
+  - Clarity and Communication Style
+  - Relevance to the Question
+  - Depth of Knowledge / Technical Accuracy
+  - Use of Examples (STAR method)
+  
+  Return ONLY a JSON object:
+  {
+    "score": number (0-100),
+    "feedback": "Constructive, detailed feedback explaining the score and how to improve.",
+    "strengths": ["Key strength 1", "Key strength 2"],
+    "improvements": ["Specific actionable improvement 1", "Specific actionable improvement 2"]
+  }`;
 
   try {
     const responseText = await generateContent(prompt, modelName);
@@ -300,21 +372,24 @@ export const generateInterviewReport = async (
 ) => {
   const { setupData, questions, responses } = interviewData;
 
-  const prompt = `Generate an interview report for ${setupData.jobRole}.
+  const prompt = `You are a Senior Interview Coach. Generate a comprehensive performance report for a mock interview for the role of ${setupData.jobRole}.
   
-Responses Summary:
-${questions.map((q: any, i: number) => `Q: ${q.question}\nA: ${responses[i]?.answer || 'No answer'}`).join('\n').substring(0, 3000)}
-
-Return ONLY a JSON object:
-{
-  "overallScore": number (0-100),
-  "strengths": ["string"],
-  "areasForImprovement": ["string"],
-  "recommendations": ["string"],
-  "performanceByCategory": [
-    {"category": "string", "score": number}
-  ]
-}`;
+  Interview Transcript Summary:
+  ${questions.map((q: any, i: number) => `Q: ${q.question}\nA: ${responses[i]?.answer || 'No answer'}`).join('\n').substring(0, 4000)}
+  
+  Return ONLY a JSON object:
+  {
+    "overallScore": number (0-100),
+    "strengths": ["Major strength 1", "Major strength 2", "Major strength 3"],
+    "areasForImprovement": ["Critical area to improve 1", "Critical area to improve 2"],
+    "recommendations": ["Actionable recommendation 1", "Actionable recommendation 2", "Actionable recommendation 3"],
+    "performanceByCategory": [
+      {"category": "Technical Knowledge", "score": number},
+      {"category": "Communication", "score": number},
+      {"category": "Problem Solving", "score": number},
+      {"category": "Cultural Fit", "score": number}
+    ]
+  }`;
 
   try {
     const responseText = await generateContent(prompt, modelName);
