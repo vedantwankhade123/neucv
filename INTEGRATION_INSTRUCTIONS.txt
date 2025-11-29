@@ -1,0 +1,175 @@
+// INSTRUCTIONS FOR MANUAL INTEGRATION
+// ====================================
+// Due to file corruption, please manually integrate these changes:
+
+// 1. UPDATE THE DIALOG COMPONENT (PromptGenerationDialog.tsx already created)
+// 2. ADD THESE CHANGES TO CoverLetterEditor.tsx:
+
+// ADD TO IMPORTS (around line 25):
+import { PromptGenerationDialog } from '@/components/PromptGenerationDialog';
+
+// ADD TO STATE VARIABLES (around line 67):
+const [showPromptDialog, setShowPromptDialog] = useState(false);
+const [isGeneratingFromPrompt, setIsGeneratingFromPrompt] = useState(false);
+
+// ADD THIS HANDLER FUNCTION (after handleGenerateAllAIContent):
+const handleGenerateFromPrompt = async (userPrompt: string) => {
+    if (!user) {
+        toast({ 
+            title: "Authentication Required", 
+            description: "Please sign in to use AI features.", 
+            variant: "destructive" 
+        });
+        return;
+    }
+
+    setIsGeneratingFromPrompt(true);
+    
+    try {
+        // Fetch user's resume for context
+        let resumeData = null;
+        try {
+            const { getUserResumesFromFirestore } = await import('@/lib/firestore-service');
+            const resumes = await getUserResumesFromFirestore(user.uid);
+            if (resumes && resumes.length > 0) {
+                resumeData = resumes[0];
+            }
+        } catch (error) {
+            console.log('Could not fetch resume data');
+        }
+
+        // Simple approach: Use the prompt to generate all three sections
+        const position = coverLetterData.recipient.position || '';
+        const companyName = coverLetterData.recipient.companyName || '';
+        
+        // Enhance the prompt with available context
+        const enhancedPrompt = `
+        ${userPrompt}
+        
+        ${position ? `Position: ${position}` : ''}
+        ${companyName ? `Company: ${companyName}` : ''}
+        ${resumeData ? `\nCandidate has experience in: ${resumeData.title || 'various roles'}` : ''}
+        `;
+
+        // Generate each section based on the prompt
+        const opening = await generateCoverLetterOpening(
+            position || 'the position',
+            companyName || 'your company',
+            resumeData,
+            coverLetterData
+        );
+        
+        const body = await generateCoverLetterBody(
+            position || 'the position',
+            companyName || 'your company',
+            resumeData,
+            { ...coverLetterData, userPrompt: enhancedPrompt }
+        );
+        
+        const closing = await generateCoverLetterClosing(
+            position || 'the position',
+            companyName || 'your company',
+            resumeData,
+            coverLetterData
+        );
+
+        // Update the cover letter
+        setCoverLetterData(prev => ({
+            ...prev,
+            content: { opening, body, closing }
+        }));
+
+        toast({ 
+            title: "Cover Letter Generated", 
+            description: "AI created your cover letter based on your prompt!" 
+        });
+        
+        setShowPromptDialog(false);
+    } catch (error: any) {
+        console.error('Error generating from prompt:', error);
+        toast({ 
+            title: "Generation Failed", 
+            description: error?.message || "Please try again.", 
+            variant: "destructive" 
+        });
+    } finally {
+        setIsGeneratingFromPrompt(false);
+    }
+};
+
+// MODIFY THE "Generate with AI" BUTTON SECTION (around line 654-672):
+// Replace the single button with a button group:
+
+<div className="flex items-center gap-2">
+    <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={() => setShowPromptDialog(true)}
+        disabled={isGeneratingAI || isGeneratingFromPrompt}
+        className="gap-2"
+    >
+        {isGeneratingFromPrompt ? (
+            <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating...
+            </>
+        ) : (
+            <>
+                <Sparkles className="w-4 h-4 text-purple-500" />
+                Generate with Prompt
+            </>
+        )}
+    </Button>
+    <Button 
+        variant="default" 
+        size="sm" 
+        onClick={handleGenerateAllAIContent} 
+        disabled={isGeneratingAI || isGeneratingFromPrompt}
+        className="gap-2 bg-purple-600 hover:bg-purple-700 text-white shadow-md"
+    >
+        {isGeneratingAI ? (
+            <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating...
+            </>
+        ) : (
+            <>
+                <Sparkles className="w-4 h-4" />
+                Generate with AI
+            </>
+        )}
+    </Button>
+</div>
+
+// ADD DIALOG AT THE END OF THE COMPONENT (before the closing </div>):
+
+<PromptGenerationDialog
+    open={showPromptDialog}
+    onOpenChange={setShowPromptDialog}
+    onGenerate={handleGenerateFromPrompt}
+    isGenerating={isGeneratingFromPrompt}
+/>
+
+// SUGGESTION PROMPTS - Update PromptGenerationDialog.tsx to include these:
+// Add this section above the textarea in PromptGenerationDialog.tsx:
+
+<div className="space-y-2">
+    <Label className="text-sm font-medium">Quick Prompts</Label>
+    <div className="grid grid-cols-1 gap-2">
+        {[
+            "Write a cover letter for a Software Engineer position highlighting my 5+ years of experience in React and TypeScript",
+            "Create a cover letter for a Marketing Manager role emphasizing my digital marketing and team leadership skills",
+            "Generate a cover letter for an entry-level Data Analyst position showcasing my Python and SQL knowledge",
+            "Write a cover letter for a Senior UX Designer role focusing on my portfolio of mobile app designs"
+        ].map((suggestion, index) => (
+            <button
+                key={index}
+                onClick={() => setPrompt(suggestion)}
+                className="text-left p-3 text-sm border rounded-lg hover:bg-secondary/50 transition-colors"
+                disabled={isGenerating}
+            >
+                💡 {suggestion}
+            </button>
+        ))}
+    </div>
+</div>

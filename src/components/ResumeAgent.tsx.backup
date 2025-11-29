@@ -1,0 +1,961 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Send, Bot, User, Loader2, ChevronUp, Sparkles, ArrowUp, Command, Mic, MicOff, Plus, AudioWaveform } from 'lucide-react';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import { Card } from './ui/card';
+import { ScrollArea } from './ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
+import { ResumeData } from '@/types/resume';
+import { processResumeAgentPrompt } from '@/lib/gemini';
+import { cn } from '@/lib/utils';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
+interface ResumeAgentProps {
+  isOpen: boolean;
+  onClose: () => void;
+  resumeData: ResumeData;
+  setResumeData: React.Dispatch<React.SetStateAction<ResumeData>>;
+  isEmbedded?: boolean;
+}
+
+type AgentState = 'prompt-only' | 'processing' | 'chat-expanded' | 'chat-collapsed';
+
+export const ResumeAgent: React.FC<ResumeAgentProps> = ({
+  isOpen,
+  onClose,
+  resumeData,
+  setResumeData,
+  isEmbedded = false,
+}) => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [agentState, setAgentState] = useState<AgentState>('prompt-only');
+  const [needsClarification, setNeedsClarification] = useState(false);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const { toast } = useToast();
+
+  // Reset state when opening/closing
+  useEffect(() => {
+    if (isOpen) {
+      // If embedded, start in chat-expanded state, otherwise prompt-only
+      setAgentState(isEmbedded ? 'chat-expanded' : 'prompt-only');
+      if (!isEmbedded) {
+        setMessages([]);
+        setInput('');
+        setNeedsClarification(false);
+        setIsChatExpanded(isEmbedded);
+      }
+      // Reset textarea height
+      if (inputRef.current) {
+        inputRef.current.style.height = '40px';
+      }
+      // Focus input after animation
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 300);
+    }
+  }, [isOpen, isEmbedded]);
+
+  useEffect(() => {
+    if (agentState === 'chat-expanded' && scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
+    }
+  }, [messages, agentState]);
+
+  // Auto-resize textarea when input or transcript changes
+  useEffect(() => {
+    if (inputRef.current && agentState === 'prompt-only') {
+      const textarea = inputRef.current;
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(textarea.scrollHeight, 120);
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [input, transcript, agentState]);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          setTranscript('');
+        };
+
+        recognition.onresult = (event: any) => {
+          let interimTranscript = '';
+          let finalTranscript = '';
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript + ' ';
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+
+          // Update input with final transcript (append) and show interim results
+          if (finalTranscript) {
+            setInput(prev => prev + finalTranscript);
+            setTranscript('');
+          } else if (interimTranscript) {
+            // Show interim results temporarily
+            setTranscript(interimTranscript);
+          }
+
+          // Reset silence timeout
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+          }
+
+          // Auto-stop after 2 seconds of silence (only for final results)
+          if (finalTranscript) {
+            silenceTimeoutRef.current = setTimeout(() => {
+              if (isListening) {
+                stopListening();
+              }
+            }, 2000);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          if (event.error === 'no-speech') {
+            stopListening();
+          } else {
+            toast({
+              title: 'Microphone Error',
+              description: 'Could not access microphone. Please check permissions.',
+              variant: 'destructive',
+            });
+            stopListening();
+          }
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+          }
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const startListening = () => {
+    if (recognitionRef.current && !isListening) {
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error('Error starting recognition:', error);
+        toast({
+          title: 'Microphone Error',
+          description: 'Could not start microphone. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    }
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  // Helper function to detect if input is casual conversation
+  const isCasualConversation = (text: string): boolean => {
+    const lowerText = text.toLowerCase().trim();
+    // Check for greetings
+    const isGreeting = /^(hi|hello|hey|greetings|good morning|good afternoon|good evening|how are you|what's up|sup)$/i.test(lowerText);
+    // Check for casual responses
+    const isCasualResponse = /^(thanks|thank you|ok|okay|yes|no|maybe|sure|alright|cool|nice|great|awesome)$/i.test(lowerText);
+    // Check if it's a short question without resume-related keywords
+    const hasResumeKeywords = /\b(experience|work|job|education|degree|skill|project|certification|add|update|include|resume|summary|achievement|company|role|position|worked|studied|graduated)\b/i.test(lowerText);
+    const isShortQuestion = lowerText.length < 50 && !hasResumeKeywords && (lowerText.includes('?') || lowerText.match(/^(what|how|when|where|why|can|could|would|should|is|are|do|does)/i));
+
+    return isGreeting || isCasualResponse || isShortQuestion;
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isProcessing) return;
+
+    // If chat is collapsed, expand it when user sends a message
+    if (agentState === 'chat-collapsed' && !isChatExpanded) {
+      setIsChatExpanded(true);
+      setAgentState('chat-expanded');
+    }
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    const userInput = input.trim();
+    setInput('');
+    setTranscript('');
+
+    // Check if it's casual conversation
+    const isCasual = isCasualConversation(userInput);
+
+    // Always show loading in prompt field first, then transition based on response
+    setIsProcessing(true);
+
+    // If in prompt-only state and it's not casual, transition to processing modal
+    if (agentState === 'prompt-only' && !isCasual) {
+      // Transition to processing state to show "AI agent is working its magic" modal
+      setAgentState('processing');
+    } else if (agentState === 'prompt-only' && isCasual) {
+      // For casual conversation, go directly to chat-expanded
+      setAgentState('chat-expanded');
+      setIsChatExpanded(true);
+    }
+
+    try {
+      const response = await processResumeAgentPrompt(userInput, resumeData, messages);
+
+      let messageContent = response.message;
+
+      // Determine if we need clarification
+      const needsClarificationNow = response.needsClarification &&
+        response.clarificationQuestions &&
+        response.clarificationQuestions.length > 0;
+
+      setNeedsClarification(needsClarificationNow);
+
+      // Add clarification questions if needed
+      if (needsClarificationNow) {
+        messageContent += '\n\nTo help me fill this out accurately, could you please provide:\n' +
+          response.clarificationQuestions!.map((q, i) => `${i + 1}. ${q}`).join('\n');
+      }
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: messageContent,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // Check if there are actual resume updates (not just conversation)
+      const hasActualUpdates = response.updates && (
+        response.updates.personalInfo ||
+        response.updates.title ||
+        response.updates.summary ||
+        (response.updates.experience && response.updates.experience.length > 0) ||
+        (response.updates.education && response.updates.education.length > 0) ||
+        (response.updates.skills && response.updates.skills.length > 0) ||
+        (response.updates.customSections && response.updates.customSections.length > 0)
+      );
+
+      // Update resume data only if there are actual updates
+      if (hasActualUpdates && (!needsClarificationNow || Object.keys(response.updates).length > 0)) {
+        setResumeData(prev => {
+          const updated = { ...prev };
+
+          if (response.updates.personalInfo) {
+            updated.personalInfo = { ...updated.personalInfo, ...response.updates.personalInfo };
+          }
+
+          if (response.updates.title) {
+            updated.title = response.updates.title;
+          }
+
+          if (response.updates.summary) {
+            updated.summary = response.updates.summary;
+          }
+
+          if (response.updates.experience && response.updates.experience.length > 0) {
+            updated.experience = [...updated.experience, ...response.updates.experience];
+          }
+
+          if (response.updates.education && response.updates.education.length > 0) {
+            updated.education = [...updated.education, ...response.updates.education];
+          }
+
+          if (response.updates.skills && response.updates.skills.length > 0) {
+            updated.skills = [...new Set([...updated.skills, ...response.updates.skills])];
+          }
+
+          if (response.updates.customSections && response.updates.customSections.length > 0) {
+            updated.customSections = [...updated.customSections, ...response.updates.customSections];
+          }
+
+          return updated;
+        });
+
+        toast({
+          title: 'Resume Updated',
+          description: 'Your resume has been updated based on your input.',
+        });
+      }
+
+      // Set state based on whether clarification is needed or if there are updates
+      if (agentState === 'processing') {
+        if (needsClarificationNow) {
+          setAgentState('chat-expanded');
+          setIsChatExpanded(true);
+        } else if (hasActualUpdates) {
+          setAgentState('chat-collapsed');
+          setIsChatExpanded(false);
+        } else {
+          setAgentState('chat-expanded');
+          setIsChatExpanded(true);
+        }
+      } else {
+        if (needsClarificationNow) {
+          setAgentState('chat-expanded');
+          setIsChatExpanded(true);
+        } else if (hasActualUpdates) {
+          setAgentState('chat-collapsed');
+          setIsChatExpanded(false);
+        } else {
+          setAgentState('chat-expanded');
+          setIsChatExpanded(true);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error processing agent prompt:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `I apologize, but I encountered an error: ${error.message || 'Please try again or rephrase your request.'}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setAgentState('chat-expanded');
+      setIsChatExpanded(true);
+
+      toast({
+        title: 'Error',
+        description: 'Failed to process your request. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleExpandChat = () => {
+    setIsChatExpanded(true);
+    setAgentState('chat-expanded');
+  };
+
+  if (!isOpen) return null;
+
+  // Prompt-only state
+  if (agentState === 'prompt-only') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
+        <div className="w-full max-w-3xl mx-auto px-4 pb-6 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300">
+          <div className="relative">
+            <div
+              className={cn(
+                "relative border shadow-2xl backdrop-blur-xl transition-all duration-300 overflow-hidden",
+                isProcessing
+                  ? "border-primary/20 shadow-primary/10 ring-2 ring-primary/5"
+                  : "border-border/60 shadow-lg hover:border-primary/20 hover:shadow-xl"
+              )}
+              style={{
+                background: isProcessing
+                  ? 'rgba(255, 255, 255, 0.95)'
+                  : 'rgba(255, 255, 255, 0.9)',
+                borderRadius: '9999px',
+              }}
+            >
+              {isProcessing && (
+                <div className="absolute inset-0 rounded-full overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-[shimmer_2s_infinite]"></div>
+                </div>
+              )}
+
+              <div className="absolute inset-[1px] rounded-full bg-gradient-to-br from-white/50 to-transparent pointer-events-none"></div>
+
+              <div className="flex items-center gap-3 p-2 relative z-10">
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={inputRef}
+                    value={input + (transcript ? ' ' + transcript : '')}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      const textarea = e.target;
+                      textarea.style.height = 'auto';
+                      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+                    }}
+                    onKeyDown={handleKeyDown}
+                    placeholder={isListening ? "Listening..." : isProcessing ? "Agent is thinking..." : "Describe your experience or ask me anything..."}
+                    className="flex-1 w-full min-h-[40px] max-h-[120px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground text-base font-medium px-5 py-2 leading-relaxed overflow-y-auto"
+                    style={{ fontFamily: 'inherit', height: '40px' }}
+                    disabled={isProcessing}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    onClick={toggleListening}
+                    disabled={isProcessing}
+                    className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-md hover:shadow-lg",
+                      isListening
+                        ? "bg-destructive text-destructive-foreground animate-pulse shadow-destructive/30"
+                        : "bg-secondary hover:bg-secondary/80 border border-transparent"
+                    )}
+                    title={isListening ? "Stop listening" : "Start voice input"}
+                  >
+                    {isListening ? (
+                      <MicOff className="h-4.5 w-4.5" />
+                    ) : (
+                      <Mic className="h-4.5 w-4.5 text-foreground" />
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || isProcessing}
+                    className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg hover:shadow-xl relative overflow-hidden group",
+                      !input.trim() || isProcessing
+                        ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+                        : "bg-primary text-primary-foreground shadow-primary/30"
+                    )}
+                  >
+                    {!input.trim() || isProcessing ? (
+                      <>
+                        {isProcessing ? (
+                          <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                        ) : (
+                          <ArrowUp className="h-4.5 w-4.5" />
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></span>
+                        <ArrowUp className="h-4.5 w-4.5 relative z-10" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="absolute -top-2 -right-2 w-9 h-9 rounded-full bg-background border border-border shadow-lg hover:shadow-xl flex items-center justify-center transition-all duration-300 z-10 hover:scale-110"
+            >
+              <X className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Processing state
+  if (agentState === 'processing') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
+        <div className="w-full max-w-2xl mx-auto pointer-events-auto animate-in slide-in-from-bottom-4 duration-300">
+          <Card className="border shadow-2xl rounded-t-2xl rounded-b-none border-b-0 p-4 bg-background">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-primary/5 rounded-lg">
+                <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-sm">AI Agent is working its magic...</p>
+                <p className="text-xs text-muted-foreground">Analyzing your input and filling your resume</p>
+              </div>
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Chat collapsed state
+  if (agentState === 'chat-collapsed' && !isChatExpanded && messages.length > 0) {
+    const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant');
+    const hasUpdateMessage = lastAssistantMessage?.content.toLowerCase().includes('updated') ||
+      lastAssistantMessage?.content.toLowerCase().includes('added') ||
+      lastAssistantMessage?.content.toLowerCase().includes('filled');
+
+    if (hasUpdateMessage) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
+          <div className="w-full max-w-3xl mx-auto px-4 pb-6 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300">
+            <div
+              className="relative p-3 shadow-lg backdrop-blur-xl bg-background/95"
+              style={{
+                borderRadius: '2rem',
+                border: '1px solid hsl(var(--border))',
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Bot className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold mb-1 text-foreground">Resume updated successfully!</p>
+                  <div
+                    className="flex items-center gap-2 p-2 rounded-xl border border-border/50"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.5)',
+                    }}
+                  >
+                    <textarea
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onFocus={handleExpandChat}
+                      placeholder="Type to continue..."
+                      className="flex-1 min-h-[36px] max-h-[60px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground text-sm px-2"
+                      disabled={isProcessing}
+                    />
+                    <button
+                      onClick={handleSend}
+                      disabled={!input.trim() || isProcessing}
+                      className="w-8 h-8 rounded-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all shrink-0"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="h-3 w-3 animate-spin text-primary-foreground" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3 text-primary-foreground" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleExpandChat}
+                    className="w-7 h-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                    title="Expand chat"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="w-7 h-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                  >
+                    <X className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // Chat expanded state (or embedded state)
+  if (agentState === 'chat-expanded' || isEmbedded) {
+    const containerClass = isEmbedded
+      ? "w-full h-full flex flex-col bg-background rounded-xl border border-border"
+      : "relative h-[600px] flex flex-col shadow-2xl backdrop-blur-xl bg-background/95";
+
+    const wrapperClass = isEmbedded
+      ? "w-full h-full"
+      : "fixed inset-0 z-50 flex items-end justify-center pointer-events-none";
+
+    const innerWrapperClass = isEmbedded
+      ? "w-full h-full"
+      : "w-full max-w-3xl mx-auto px-4 pb-6 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300";
+
+
+    return (
+      <div className={wrapperClass}>
+        <div className={innerWrapperClass}>
+          <div
+            className={containerClass}
+            style={!isEmbedded ? {
+              borderRadius: '2rem',
+              border: '1px solid hsl(var(--border))',
+            } : undefined}
+          >
+            {/* Header - Only show if not embedded */}
+            {!isEmbedded && (
+              <div className="flex items-center justify-between p-4 border-b border-border/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/5 rounded-lg">
+                    <Bot className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg text-foreground">AI Resume Agent</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {needsClarification ? 'I need some clarification' : 'Chat with your AI agent'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {!isEmbedded && agentState === 'chat-collapsed' && (
+                      <button
+                        onClick={() => {
+                          setIsChatExpanded(false);
+                          setAgentState('chat-collapsed');
+                        }}
+                        className="w-8 h-8 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                      >
+                        <ChevronUp className="h-4 w-4 rotate-180 text-muted-foreground" />
+                      </button>
+                    )}
+                    {!isEmbedded && (
+                      <button
+                        onClick={onClose}
+                        className="w-8 h-8 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                      >
+                        <div className="w-full max-w-2xl mx-auto pointer-events-auto animate-in slide-in-from-bottom-4 duration-300">
+                          <Card className="border shadow-2xl rounded-t-2xl rounded-b-none border-b-0 p-4 bg-background">
+                            <div className="flex items-center gap-3">
+                              <div className="p-3 bg-primary/5 rounded-lg">
+                                <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-semibold text-sm">AI Agent is working its magic...</p>
+                                <p className="text-xs text-muted-foreground">Analyzing your input and filling your resume</p>
+                              </div>
+                              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            </div>
+                          </Card>
+                        </div>
+                      </div>
+                    );
+  }
+
+  // Chat collapsed state
+  if (agentState === 'chat-collapsed' && !isChatExpanded && messages.length > 0) {
+    const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant');
+                    const hasUpdateMessage = lastAssistantMessage?.content.toLowerCase().includes('updated') ||
+                    lastAssistantMessage?.content.toLowerCase().includes('added') ||
+                    lastAssistantMessage?.content.toLowerCase().includes('filled');
+
+                    if (hasUpdateMessage) {
+      return (
+                    <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none">
+                      <div className="w-full max-w-3xl mx-auto px-4 pb-6 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300">
+                        <div
+                          className="relative p-3 shadow-lg backdrop-blur-xl bg-background/95"
+                          style={{
+                            borderRadius: '2rem',
+                            border: '1px solid hsl(var(--border))',
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                              <Bot className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold mb-1 text-foreground">Resume updated successfully!</p>
+                              <div
+                                className="flex items-center gap-2 p-2 rounded-xl border border-border/50"
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.5)',
+                                }}
+                              >
+                                <textarea
+                                  value={input}
+                                  onChange={(e) => setInput(e.target.value)}
+                                  onKeyDown={handleKeyDown}
+                                  onFocus={handleExpandChat}
+                                  placeholder="Type to continue..."
+                                  className="flex-1 min-h-[36px] max-h-[60px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground text-sm px-2"
+                                  disabled={isProcessing}
+                                />
+                                <button
+                                  onClick={handleSend}
+                                  disabled={!input.trim() || isProcessing}
+                                  className="w-8 h-8 rounded-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all shrink-0"
+                                >
+                                  {isProcessing ? (
+                                    <Loader2 className="h-3 w-3 animate-spin text-primary-foreground" />
+                                  ) : (
+                                    <ArrowUp className="h-3 w-3 text-primary-foreground" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={handleExpandChat}
+                                className="w-7 h-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                                title="Expand chat"
+                              >
+                                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                              <button
+                                onClick={onClose}
+                                className="w-7 h-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                              >
+                                <X className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    );
+    }
+  }
+
+                    // Chat expanded state (or embedded state)
+                    if (agentState === 'chat-expanded' || isEmbedded) {
+    const containerClass = isEmbedded
+                    ? "w-full h-full flex flex-col bg-background rounded-xl border border-border"
+                    : "relative h-[600px] flex flex-col shadow-2xl backdrop-blur-xl bg-background/95";
+
+                    const wrapperClass = isEmbedded
+                    ? "w-full h-full"
+                    : "fixed inset-0 z-50 flex items-end justify-center pointer-events-none";
+
+                    const innerWrapperClass = isEmbedded
+                    ? "w-full h-full"
+                    : "w-full max-w-3xl mx-auto px-4 pb-6 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300";
+
+                    return (
+                    <div className={wrapperClass}>
+                      <div className={innerWrapperClass}>
+                        <div
+                          className={containerClass}
+                          style={!isEmbedded ? {
+                            borderRadius: '2rem',
+                            border: '1px solid hsl(var(--border))',
+                          } : undefined}
+                        >
+                          {/* Header - Only show if not embedded */}
+                          {!isEmbedded && (
+                            <div className="flex items-center justify-between p-4 border-b border-border/50">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-primary/5 rounded-lg">
+                                  <Bot className="h-5 w-5 text-primary" />
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-lg text-foreground">AI Resume Agent</h3>
+                                  <p className="text-xs text-muted-foreground">
+                                    {needsClarification ? 'I need some clarification' : 'Chat with your AI agent'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2">
+                                  {!isEmbedded && agentState === 'chat-collapsed' && (
+                                    <button
+                                      onClick={() => {
+                                        setIsChatExpanded(false);
+                                        setAgentState('chat-collapsed');
+                                      }}
+                                      className="w-8 h-8 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                                    >
+                                      <ChevronUp className="h-4 w-4 rotate-180 text-muted-foreground" />
+                                    </button>
+                                  )}
+                                  {!isEmbedded && (
+                                    <button
+                                      onClick={onClose}
+                                      className="w-8 h-8 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-all"
+                                    >
+                                      <X className="h-4 w-4 text-muted-foreground" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Messages */}
+                          <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+                            <div className="space-y-6">
+                              {messages.length === 0 && (
+                                <div className="flex flex-col items-center justify-center h-full text-center p-8 space-y-4 opacity-50">
+                                  <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center">
+                                    <Sparkles className="h-8 w-8 text-primary" />
+                                  </div>
+                                  <div>
+                                    <h3 className="font-semibold text-lg">How can I help you today?</h3>
+                                    <p className="text-sm text-muted-foreground">I can help you write your resume, improve your summary, or add new sections.</p>
+                                  </div>
+                                </div>
+                              )}
+                              {messages.map((message) => (
+                                <div
+                                  key={message.id}
+                                  className={cn(
+                                    "flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300",
+                                    message.role === 'user' ? 'justify-end' : 'justify-start'
+                                  )}
+                                >
+                                  {message.role === 'assistant' && (
+                                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mt-1">
+                                      <Bot className="h-5 w-5 text-primary" />
+                                    </div>
+                                  )}
+                                  <div
+                                    className={cn(
+                                      "max-w-[85%] px-5 py-3.5 shadow-sm",
+                                      message.role === 'user'
+                                        ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-sm'
+                                        : 'bg-secondary/50 text-foreground rounded-2xl rounded-tl-sm border border-border/50'
+                                    )}
+                                  >
+                                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                                  </div>
+                                  {message.role === 'user' && (
+                                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center">
+                                      <User className="h-4 w-4 text-primary" />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              {isProcessing && (
+                                <div className="flex gap-4 justify-start">
+                                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mt-1">
+                                    <Bot className="h-5 w-5 text-primary" />
+                                  </div>
+                                  <div className="bg-secondary/50 rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm border border-border/50 flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                    <span className="text-sm text-muted-foreground">Thinking...</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </ScrollArea>
+
+                          {/* Input */}
+                          <div className="p-4 bg-background/50 backdrop-blur-sm">
+                            <div className="relative max-w-4xl mx-auto">
+                              <div
+                                className="flex items-center gap-2 p-1.5 rounded-full border border-border/50 shadow-sm transition-all duration-200 focus-within:shadow-md focus-within:border-primary/20"
+                                style={{
+                                  background: 'hsl(var(--secondary))', // Darker background for input area
+                                }}
+                              >
+                                {/* Plus Button */}
+                                <button
+                                  className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background/50 transition-colors"
+                                  title="Add attachment"
+                                >
+                                  <Plus className="h-5 w-5" />
+                                </button>
+
+                                <textarea
+                                  value={input}
+                                  onChange={(e) => setInput(e.target.value)}
+                                  onKeyDown={handleKeyDown}
+                                  placeholder={needsClarification ? "Provide the information requested above..." : "Ask anything..."}
+                                  className="flex-1 min-h-[40px] max-h-[120px] resize-none bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground text-sm font-medium px-2 py-2.5"
+                                  disabled={isProcessing}
+                                  style={{ height: '44px' }}
+                                />
+
+                                <div className="flex items-center gap-1 pr-1">
+                                  {/* Gemini Icon */}
+                                  <div className="w-8 h-8 flex items-center justify-center text-muted-foreground">
+                                    <Sparkles className="h-4 w-4" />
+                                  </div>
+
+                                  {/* Microphone button */}
+                                  <button
+                                    onClick={toggleListening}
+                                    disabled={isProcessing}
+                                    className={cn(
+                                      "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200",
+                                      isListening
+                                        ? "text-destructive animate-pulse"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                    )}
+                                    title={isListening ? "Stop listening" : "Start voice input"}
+                                  >
+                                    {isListening ? (
+                                      <MicOff className="h-4 w-4" />
+                                    ) : (
+                                      <Mic className="h-4 w-4" />
+                                    )}
+                                  </button>
+
+                                  {/* Send/Waveform button */}
+                                  <button
+                                    onClick={handleSend}
+                                    disabled={!input.trim() || isProcessing}
+                                    className={cn(
+                                      "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200",
+                                      !input.trim() && !isProcessing
+                                        ? "bg-background text-muted-foreground" // Inactive state looks like waveform icon container
+                                        : "bg-primary text-primary-foreground shadow-md hover:shadow-lg"
+                                    )}
+                                  >
+                                    {!input.trim() && !isProcessing ? (
+                                      <AudioWaveform className="h-5 w-5" />
+                                    ) : isProcessing ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <ArrowUp className="h-5 w-5" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    );
+  }
+
+                    return null;
+};
+                    ```
