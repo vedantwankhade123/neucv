@@ -96,7 +96,8 @@ const Header = ({ onPreviewClick, onClear, onResetStyles, mobileView, onDownload
     <>
       <div className="flex items-center gap-4">
         <Logo />
-        <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')} className="rounded-full shadow-md hover:shadow-lg transition-shadow">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')} className="rounded-full text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Dashboard
         </Button>
       </div>
