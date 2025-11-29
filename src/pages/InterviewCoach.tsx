@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Video, VideoOff, Mic, MicOff, Square, Volume2, Loader2, CheckCircle2, ArrowRight, User, Clock, ChevronRight, Home, PlusCircle } from 'lucide-react';
+import { Mic, MicOff, Square, Volume2, Loader2, CheckCircle2, ArrowRight, Clock, ChevronRight, Home, PlusCircle, Settings, Keyboard, Bot, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,25 +12,32 @@ import { calculatePerformanceScore, formatDuration } from '@/lib/interview-servi
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 
 type InterviewPhase = 'interview' | 'report';
+type InputMode = 'voice' | 'text';
 
 const InterviewCoach = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { toast } = useToast();
-    const videoRef = useRef<HTMLVideoElement>(null);
     const timerIntervalRef = useRef<number | null>(null);
     const recognitionRef = useRef<any>(null);
+    const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Initial state from location
     const [interviewData, setInterviewData] = useState<InterviewData | null>(null);
     const [phase, setPhase] = useState<InterviewPhase>('interview');
 
-    // Media controls
-    const [stream, setStream] = useState<MediaStream | null>(null);
-    const [isVideoOn, setIsVideoOn] = useState(false);
-    const [isAudioOn, setIsAudioOn] = useState(true);
+    // Interview Configuration
+    const [inputMode, setInputMode] = useState<InputMode>('voice');
+    const [autoSubmit, setAutoSubmit] = useState(true);
     const [isListening, setIsListening] = useState(false);
 
     // Interview state
@@ -48,51 +55,22 @@ const InterviewCoach = () => {
         if (data) {
             setInterviewData(data);
             setQuestionStartTime(Date.now());
-            // Auto-start video
-            toggleVideo();
         } else {
-            // Redirect to setup if no data
             navigate('/dashboard/interview');
         }
     }, [location.state, navigate]);
 
-    // Start/stop video stream
-    const toggleVideo = async () => {
-        if (!isVideoOn) {
-            try {
-                const mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: true
-                });
-                setStream(mediaStream);
-                if (videoRef.current) {
-                    videoRef.current.srcObject = mediaStream;
-                }
-                setIsVideoOn(true);
-            } catch (err) {
-                console.error("Error accessing camera:", err);
-                toast({
-                    title: 'Camera Access Denied',
-                    description: 'Please allow camera access to use video features.',
-                    variant: 'destructive'
-                });
-            }
+    // Handle Input Mode Switch
+    const toggleInputMode = () => {
+        const newMode = inputMode === 'voice' ? 'text' : 'voice';
+        setInputMode(newMode);
+        
+        if (newMode === 'text') {
+            stopListening();
         } else {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                setStream(null);
-            }
-            setIsVideoOn(false);
+            // Optional: Auto-start listening when switching back to voice?
+            // startListening(); 
         }
-    };
-
-    const toggleAudio = () => {
-        if (stream) {
-            stream.getAudioTracks().forEach(track => {
-                track.enabled = !isAudioOn;
-            });
-        }
-        setIsAudioOn(!isAudioOn);
     };
 
     // Initialize Speech Recognition
@@ -107,26 +85,40 @@ const InterviewCoach = () => {
 
                 recognition.onresult = (event: any) => {
                     let finalTranscript = '';
+                    let interimTranscript = '';
 
                     for (let i = event.resultIndex; i < event.results.length; i++) {
                         const transcript = event.results[i][0].transcript;
                         if (event.results[i].isFinal) {
                             finalTranscript += transcript + ' ';
+                        } else {
+                            interimTranscript += transcript;
                         }
                     }
 
                     if (finalTranscript) {
                         setCurrentAnswer(prev => prev + finalTranscript);
+                        // Reset silence timer on final result
+                        resetSilenceTimer();
+                    }
+                    
+                    // Also reset on interim results to keep listening while talking
+                    if (interimTranscript) {
+                        resetSilenceTimer();
                     }
                 };
 
                 recognition.onerror = (event: any) => {
                     console.error('Speech recognition error:', event.error);
+                    if (event.error === 'no-speech') {
+                        // Just restart if no speech detected, don't stop
+                        return; 
+                    }
                     setIsListening(false);
                 };
 
                 recognition.onend = () => {
-                    setIsListening(false);
+                    // Logic handled in stopListening or manual stop
                 };
 
                 recognitionRef.current = recognition;
@@ -134,18 +126,56 @@ const InterviewCoach = () => {
         }
     }, [phase]);
 
+    const resetSilenceTimer = () => {
+        if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+        }
+
+        // Only set timer if in voice mode and auto-submit is enabled
+        if (inputMode === 'voice' && autoSubmit) {
+            silenceTimerRef.current = setTimeout(() => {
+                handleSilenceDetected();
+            }, 2500); // 2.5 seconds of silence triggers submit
+        }
+    };
+
+    const handleSilenceDetected = () => {
+        if (isListening) {
+            stopListening();
+            // Automatically submit if we have an answer
+            if (currentAnswer.trim().length > 0) {
+                toast({
+                    title: "Silence Detected",
+                    description: "Auto-submitting your answer...",
+                });
+                handleSubmitAnswer();
+            }
+        }
+    };
+
+    const startListening = () => {
+        try {
+            recognitionRef.current?.start();
+            setIsListening(true);
+            resetSilenceTimer();
+        } catch (e) {
+            console.error("Error starting speech recognition:", e);
+        }
+    };
+
+    const stopListening = () => {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+        if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+        }
+    };
+
     const toggleListening = () => {
         if (isListening) {
-            recognitionRef.current?.stop();
-            setIsListening(false);
+            stopListening();
         } else {
-            try {
-                recognitionRef.current?.start();
-                setIsListening(true);
-            } catch (e) {
-                console.error("Error starting speech recognition:", e);
-                setIsListening(true);
-            }
+            startListening();
         }
     };
 
@@ -153,16 +183,13 @@ const InterviewCoach = () => {
     const handleSubmitAnswer = async () => {
         if (!interviewData) return;
         
-        if (isListening) {
-            toggleListening();
-        }
+        // Ensure listening is stopped before processing
+        stopListening();
 
+        // Allow submitting empty answers in voice mode if auto-submit triggered falsely? 
+        // No, better to check length.
         if (!currentAnswer.trim()) {
-            toast({
-                title: 'No Answer Provided',
-                description: 'Please speak or type your answer before submitting.',
-                variant: 'destructive'
-            });
+            // If triggered by auto-submit but empty, just return (maybe just background noise)
             return;
         }
 
@@ -172,7 +199,6 @@ const InterviewCoach = () => {
             const currentQuestion = interviewData.questions[currentQuestionIndex];
             const questionDuration = Math.floor((Date.now() - questionStartTime) / 1000);
 
-            // Create response object (evaluation deferred)
             const response: InterviewResponse = {
                 questionId: currentQuestion.id,
                 answer: currentAnswer,
@@ -192,14 +218,14 @@ const InterviewCoach = () => {
             if (currentQuestionIndex + 1 >= interviewData.questions.length) {
                 await completeInterview(updatedData);
             } else {
+                // Move to next question
                 setCurrentQuestionIndex(currentQuestionIndex + 1);
                 setCurrentAnswer('');
                 setQuestionStartTime(Date.now());
-
-                toast({
-                    title: 'Answer Saved',
-                    description: 'Moving to next question...'
-                });
+                
+                // If in voice mode & auto-submit is on, maybe auto-start listening for next question?
+                // For now, let's keep it manual start for next question to allow reading time.
+                // OR we can add a small delay and start listening.
             }
         } catch (error: any) {
             console.error('Error submitting answer:', error);
@@ -216,37 +242,28 @@ const InterviewCoach = () => {
     const handleEndInterviewEarly = async () => {
         if (!interviewData) return;
         
-        if (confirm("Are you sure you want to end the interview early? We will evaluate the questions answered so far.")) {
-            if (isListening) toggleListening();
+        if (confirm("End interview early? We will generate a report based on answers so far.")) {
+            stopListening();
             await completeInterview(interviewData);
         }
     };
 
     const handleExit = () => {
-        if (confirm("Are you sure you want to leave? Your progress will be lost.")) {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+        if (confirm("Leave session? Progress will be lost.")) {
+            stopListening();
             navigate('/dashboard');
         }
     };
 
     const handleNewSession = () => {
-        if (confirm("Start a new session? Current progress will be lost.")) {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+        if (confirm("Start new session? Current progress will be lost.")) {
+            stopListening();
             navigate('/dashboard/interview');
         }
     };
 
     const completeInterview = async (finalData: InterviewData) => {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            setStream(null);
-            setIsVideoOn(false);
-        }
-
+        stopListening();
         setIsGeneratingReport(true);
         setAnalysisProgress(0);
 
@@ -260,29 +277,19 @@ const InterviewCoach = () => {
                 
                 if (question) {
                     setAnalysisProgress(Math.round(((i) / totalResponses) * 50));
-                    
                     const evaluation = await evaluateInterviewResponse(
                         question.question,
                         response.answer,
                         finalData.setupData.language
                     );
-                    
-                    evaluatedResponses.push({
-                        ...response,
-                        evaluation
-                    });
+                    evaluatedResponses.push({ ...response, evaluation });
                 } else {
                     evaluatedResponses.push(response);
                 }
             }
 
             setAnalysisProgress(60);
-
-            const dataWithEvaluations = {
-                ...finalData,
-                responses: evaluatedResponses
-            };
-
+            const dataWithEvaluations = { ...finalData, responses: evaluatedResponses };
             const report = await generateInterviewReport(dataWithEvaluations);
             setAnalysisProgress(90);
 
@@ -296,34 +303,15 @@ const InterviewCoach = () => {
             setAnalysisProgress(100);
             setInterviewData(completedData);
             setPhase('report');
-
-            toast({
-                title: 'Analysis Complete',
-                description: 'Your comprehensive interview report is ready.'
-            });
         } catch (error: any) {
             console.error('Error generating report:', error);
             toast({
                 title: 'Report Generation Failed',
-                description: 'Showing raw results. Please try again later.',
+                description: 'Please try again later.',
                 variant: 'destructive'
             });
-
-            const fallbackReport = {
-                overallScore: calculatePerformanceScore(finalData.responses),
-                strengths: ['Completed the interview'],
-                areasForImprovement: ['Report generation failed'],
-                recommendations: ['Try again later'],
-                performanceByCategory: []
-            };
-
-            setInterviewData({
-                ...finalData,
-                endTime: Date.now(),
-                status: 'completed',
-                report: fallbackReport
-            });
-            setPhase('report');
+            // Handle fallback...
+            setPhase('report'); // Show partial report or error state
         } finally {
             setIsGeneratingReport(false);
         }
@@ -335,46 +323,16 @@ const InterviewCoach = () => {
             timerIntervalRef.current = window.setInterval(() => {
                 const elapsed = Math.floor((Date.now() - interviewData.startTime) / 1000);
                 setElapsedTime(elapsed);
-
-                const timeLimit = interviewData.setupData.duration * 60;
-                if (elapsed >= timeLimit) {
-                    handleTimeUp();
+                if (elapsed >= interviewData.setupData.duration * 60) {
+                    toast({ title: 'Time Up!', description: 'Interview time limit reached.', variant: 'destructive' });
+                    completeInterview(interviewData);
                 }
             }, 1000);
-
             return () => {
-                if (timerIntervalRef.current) {
-                    clearInterval(timerIntervalRef.current);
-                }
+                if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
             };
         }
     }, [phase, interviewData]);
-
-    const handleTimeUp = () => {
-        toast({
-            title: 'Time Up!',
-            description: 'Interview time limit reached.',
-            variant: 'destructive'
-        });
-        if (interviewData) {
-            completeInterview(interviewData);
-        }
-    };
-
-    // Cleanup
-    useEffect(() => {
-        return () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            if (timerIntervalRef.current) {
-                clearInterval(timerIntervalRef.current);
-            }
-            if (recognitionRef.current) {
-                recognitionRef.current.stop();
-            }
-        };
-    }, [stream]);
 
     if (!interviewData && phase === 'interview') return null;
 
@@ -390,143 +348,227 @@ const InterviewCoach = () => {
 
     const currentQuestion = interviewData!.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / interviewData!.questions.length) * 100;
-    const timeLimit = interviewData!.setupData.duration * 60;
-    const timeRemaining = Math.max(0, timeLimit - elapsedTime);
+    const timeRemaining = Math.max(0, (interviewData!.setupData.duration * 60) - elapsedTime);
 
     return (
-        <div className="flex flex-col h-screen bg-background font-sans">
+        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
             <header className="h-14 border-b px-4 flex items-center justify-between bg-white z-20">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={handleExit} className="h-8 w-8">
-                        <Home className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard">
+                        <Home className="h-5 w-5 text-slate-500" />
                     </Button>
-                    <div className="h-4 w-px bg-slate-200"></div>
+                    <div className="w-px h-8 bg-slate-200"></div>
                     <div className="flex items-center gap-2">
-                        <Video className="h-4 w-4 text-primary" />
-                        <span className="font-semibold text-sm">{interviewData!.setupData.jobRole}</span>
+                        <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <Bot className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                            <h1 className="text-sm font-bold text-slate-900 leading-none">AI Interviewer</h1>
+                            <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{interviewData!.setupData.jobRole}</p>
+                        </div>
                     </div>
                 </div>
                 
                 <div className="flex items-center gap-3">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-slate-500">
+                                <Settings className="h-5 w-5" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 p-4 mr-4">
+                            <h4 className="font-medium mb-3 text-sm">Session Settings</h4>
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="auto-submit" className="text-sm flex flex-col">
+                                        <span>Auto-Submit Answers</span>
+                                        <span className="text-xs text-muted-foreground font-normal">When silence detected (Voice only)</span>
+                                    </Label>
+                                    <Switch id="auto-submit" checked={autoSubmit} onCheckedChange={setAutoSubmit} />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="input-mode" className="text-sm">Typing Mode</Label>
+                                    <Switch 
+                                        id="input-mode" 
+                                        checked={inputMode === 'text'} 
+                                        onCheckedChange={() => toggleInputMode()} 
+                                    />
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
                     <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full">
                         <Clock className="h-3 w-3 text-muted-foreground" />
                         <span className={cn("text-xs font-mono font-medium", timeRemaining < 300 && "text-red-500")}>
                             {formatDuration(timeRemaining)}
                         </span>
                     </div>
-                    <Button variant="outline" size="sm" onClick={handleNewSession} className="h-8 text-xs">
-                        <PlusCircle className="mr-1.5 h-3 w-3" /> New Session
+                    
+                    <Button variant="outline" size="sm" onClick={handleNewSession} className="hidden md:flex h-8 text-xs gap-2">
+                        <PlusCircle className="h-3.5 w-3.5" /> New
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={handleEndInterviewEarly} className="h-8 text-xs">
-                        <Square className="mr-1.5 h-3 w-3 fill-current" /> End
+                    
+                    <Button variant="destructive" size="sm" onClick={handleEndInterviewEarly} className="h-8 text-xs gap-2">
+                        <Square className="h-3.5 w-3.5 fill-current" /> End
                     </Button>
                 </div>
             </header>
 
-            {/* Main Layout */}
-            <main className="flex-1 overflow-hidden relative">
-                <div className="container h-full max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Main Content */}
+            <main className="flex-grow p-4 md:p-6 overflow-y-auto bg-slate-50">
+                <div className="max-w-7xl mx-auto h-full flex flex-col lg:flex-row gap-6">
                     
-                    {/* Left: Content Area */}
-                    <div className="lg:col-span-8 flex flex-col gap-4 h-full">
+                    {/* Left: AI Avatar & Context */}
+                    <div className="w-full lg:w-1/3 flex flex-col gap-4">
+                        {/* AI Avatar Card */}
+                        <Card className="aspect-video lg:aspect-square bg-gradient-to-b from-slate-900 to-slate-800 rounded-2xl overflow-hidden shadow-xl border-slate-800 relative flex flex-col items-center justify-center p-6">
+                            <div className="relative">
+                                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-tr from-primary to-purple-600 p-1 animate-pulse">
+                                    <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center overflow-hidden border-4 border-slate-800">
+                                        <img 
+                                            src={`https://api.dicebear.com/7.x/bottts/svg?seed=${interviewData!.setupData.jobRole}&backgroundColor=transparent`}
+                                            alt="AI Interviewer"
+                                            className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                                        />
+                                    </div>
+                                </div>
+                                {isListening && (
+                                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">
+                                        LISTENING
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="mt-6 text-center space-y-2">
+                                <h3 className="text-white font-semibold text-lg">AI Interviewer</h3>
+                                <p className="text-slate-400 text-sm max-w-[250px]">
+                                    I'm listening. Take your time to answer the question clearly.
+                                </p>
+                            </div>
+
+                            {/* Audio Visualizer Placeholder */}
+                            <div className="mt-8 flex items-center justify-center gap-1 h-8">
+                                {[1,2,3,4,5].map((i) => (
+                                    <div 
+                                        key={i} 
+                                        className={cn(
+                                            "w-1.5 bg-primary rounded-full transition-all duration-150",
+                                            isListening ? "animate-[bounce_1s_infinite]" : "h-1.5 opacity-30"
+                                        )}
+                                        style={{ animationDelay: `${i * 0.1}s` }}
+                                    />
+                                ))}
+                            </div>
+                        </Card>
+
+                        {/* Coach Tip */}
+                        <Card className="p-5 bg-blue-50 border-blue-100 shadow-sm flex-grow">
+                            <div className="flex gap-3">
+                                <div className="bg-blue-100 p-2 rounded-lg h-fit text-blue-600">
+                                    <Sparkles className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-sm text-blue-900 mb-1">Interviewer's Note</h4>
+                                    <p className="text-sm text-blue-800 leading-relaxed">
+                                        Try to keep your answers concise but detailed. Aim for 1-2 minutes per response.
+                                    </p>
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+
+                    {/* Right: Question & Input */}
+                    <div className="w-full lg:w-2/3 flex flex-col gap-4 h-full min-h-[500px]">
                         {/* Progress */}
                         <div className="flex items-center gap-3 px-1">
                             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                                Q{currentQuestionIndex + 1} of {interviewData!.questions.length}
+                                Question {currentQuestionIndex + 1}/{interviewData!.questions.length}
                             </span>
-                            <Progress value={progress} className="h-2" />
+                            <Progress value={progress} className="h-2 flex-grow" />
+                            <Badge variant="outline" className="text-xs">{Math.round(progress)}%</Badge>
                         </div>
 
                         {/* Question Card */}
-                        <Card className="p-6 border-l-4 border-l-primary shadow-sm bg-white">
+                        <Card className="p-6 bg-white border-l-4 border-l-primary shadow-sm">
                             <div className="flex flex-wrap gap-2 mb-3">
                                 <Badge variant="secondary" className="text-xs">{currentQuestion.category}</Badge>
-                                <Badge variant="outline" className="text-xs text-muted-foreground">{currentQuestion.difficulty}</Badge>
+                                <Badge variant="outline" className="text-xs text-muted-foreground capitalize">{currentQuestion.difficulty}</Badge>
                             </div>
-                            <h2 className="text-xl md:text-2xl font-bold leading-relaxed">
+                            <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed">
                                 {currentQuestion.question}
                             </h2>
                         </Card>
 
-                        {/* Answer Area */}
-                        <div className="flex-1 flex flex-col relative min-h-[200px]">
-                            <Textarea
-                                value={currentAnswer}
-                                onChange={(e) => setCurrentAnswer(e.target.value)}
-                                placeholder="Type your answer here or click the microphone to speak..."
-                                className="flex-1 resize-none text-base p-6 leading-relaxed shadow-sm bg-white focus-visible:ring-1 border-slate-200"
-                                disabled={isSubmittingAnswer}
-                            />
-                            
-                            <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                                {isListening && (
-                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-full text-xs font-bold border border-red-100 animate-pulse">
-                                        <div className="w-2 h-2 bg-red-500 rounded-full" />
-                                        Recording
-                                    </div>
-                                )}
+                        {/* Answer Input Area */}
+                        <Card className="flex-grow flex flex-col shadow-sm border-slate-200 relative overflow-hidden bg-white">
+                            <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                                <div className="flex items-center gap-2">
+                                    {inputMode === 'voice' ? <Mic className="h-4 w-4 text-primary" /> : <Keyboard className="h-4 w-4 text-primary" />}
+                                    <span className="text-xs font-medium text-slate-600 uppercase tracking-wide">
+                                        {inputMode === 'voice' ? 'Voice Answer' : 'Text Answer'}
+                                    </span>
+                                </div>
                                 <Button
-                                    variant={isListening ? "destructive" : "secondary"}
-                                    size="icon"
-                                    onClick={toggleListening}
-                                    className="h-10 w-10 rounded-full shadow-sm"
-                                    title={isListening ? "Stop Recording" : "Start Recording"}
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={toggleInputMode}
+                                    className="h-7 text-xs text-muted-foreground hover:text-primary"
                                 >
-                                    {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                                    Switch to {inputMode === 'voice' ? 'Text' : 'Voice'}
                                 </Button>
                             </div>
-                        </div>
-
-                        {/* Controls */}
-                        <div className="flex justify-between items-center bg-white p-3 rounded-lg border shadow-sm">
-                            <div className="text-xs text-muted-foreground px-2">
-                                {currentAnswer.length} characters
+                            
+                            <div className="relative flex-grow">
+                                <Textarea
+                                    value={currentAnswer}
+                                    onChange={(e) => setCurrentAnswer(e.target.value)}
+                                    placeholder={inputMode === 'voice' ? "Listening... Speak your answer clearly." : "Type your answer here..."}
+                                    className="h-full resize-none border-0 focus-visible:ring-0 text-base p-6 leading-relaxed bg-transparent text-slate-800 placeholder:text-slate-400"
+                                    disabled={isSubmittingAnswer || (inputMode === 'voice' && isListening)}
+                                />
+                                
+                                {inputMode === 'voice' && (
+                                    <div className="absolute bottom-6 right-6">
+                                        <Button
+                                            size="lg"
+                                            variant={isListening ? "destructive" : "default"}
+                                            className={cn(
+                                                "rounded-full h-14 w-14 shadow-lg transition-all duration-300",
+                                                isListening ? "animate-pulse ring-4 ring-red-100" : "hover:scale-105"
+                                            )}
+                                            onClick={toggleListening}
+                                        >
+                                            {isListening ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
-                            <Button onClick={handleSubmitAnswer} disabled={!currentAnswer.trim() || isSubmittingAnswer} className="px-6">
-                                {isSubmittingAnswer ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Submit Answer <ChevronRight className="ml-2 h-4 w-4" /></>}
-                            </Button>
-                        </div>
-                    </div>
 
-                    {/* Right: Sidebar */}
-                    <div className="lg:col-span-4 flex flex-col gap-4 h-full">
-                        {/* Video Preview */}
-                        <div className="aspect-video bg-slate-900 rounded-lg overflow-hidden shadow-md relative group">
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                muted
-                                playsInline
-                                className={cn("w-full h-full object-cover", !isVideoOn && "hidden")}
-                            />
-                            {!isVideoOn && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-                                    <User className="h-12 w-12 mb-2 opacity-50" />
-                                    <span className="text-xs font-medium">Camera Off</span>
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                                <div className="text-xs text-muted-foreground font-medium pl-2">
+                                    {currentAnswer.length} chars
                                 </div>
-                            )}
-                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-2 rounded-full backdrop-blur-sm">
-                                <button onClick={toggleVideo} className="p-1.5 rounded-full hover:bg-white/20 text-white transition-colors">
-                                    {isVideoOn ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
-                                </button>
-                                <button onClick={toggleAudio} className="p-1.5 rounded-full hover:bg-white/20 text-white transition-colors">
-                                    {isAudioOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Coach Tip */}
-                        <Card className="p-4 bg-blue-50/50 border-blue-100 flex-1">
-                            <div className="flex items-start gap-3">
-                                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg mt-0.5">
-                                    <Volume2 className="h-4 w-4" />
-                                </div>
-                                <div>
-                                    <h4 className="font-semibold text-sm text-blue-900 mb-1">Quick Tip</h4>
-                                    <p className="text-sm text-blue-800/80 leading-relaxed">
-                                        Use the <strong>STAR method</strong> (Situation, Task, Action, Result) for behavioral questions to provide structured and impactful answers.
-                                    </p>
+                                <div className="flex gap-3 items-center">
+                                    {autoSubmit && inputMode === 'voice' && (
+                                        <span className="text-[10px] text-muted-foreground hidden sm:inline-block">
+                                            Auto-submit on silence enabled
+                                        </span>
+                                    )}
+                                    <Button
+                                        onClick={handleSubmitAnswer}
+                                        disabled={!currentAnswer.trim() || isSubmittingAnswer}
+                                        className="px-6 shadow-sm"
+                                    >
+                                        {isSubmittingAnswer ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                Submit Answer <ChevronRight className="ml-2 h-4 w-4" />
+                                            </>
+                                        )}
+                                    </Button>
                                 </div>
                             </div>
                         </Card>
@@ -534,23 +576,33 @@ const InterviewCoach = () => {
                 </div>
             </main>
 
-            {/* Clean, Minimalist Loader */}
+            {/* Full Screen Loading Overlay */}
             {isGeneratingReport && (
-                <div className="fixed inset-0 bg-background/95 z-50 flex flex-col items-center justify-center animate-in fade-in duration-300">
-                    <div className="relative mb-6">
-                        <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
-                        <div className="absolute inset-0 rounded-full border-t-4 border-primary animate-spin"></div>
-                        <div className="h-16 w-16 rounded-full flex items-center justify-center">
-                            <CheckCircle2 className="h-8 w-8 text-primary animate-pulse" />
+                <div className="fixed inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-500">
+                    <div className="flex flex-col items-center max-w-sm text-center p-6">
+                        <div className="relative mb-8">
+                            <div className="w-20 h-20 rounded-full border-4 border-slate-100"></div>
+                            <div className="absolute inset-0 rounded-full border-t-4 border-primary animate-spin"></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <Bot className="h-8 w-8 text-primary" />
+                            </div>
                         </div>
-                    </div>
-                    <h2 className="text-2xl font-bold tracking-tight text-foreground">Analyzing Performance</h2>
-                    <p className="text-muted-foreground mt-2 text-sm">Reviewing your answers and generating feedback...</p>
-                    <div className="w-64 h-1.5 bg-slate-100 rounded-full mt-6 overflow-hidden">
-                        <div 
-                            className="h-full bg-primary transition-all duration-300 rounded-full"
-                            style={{ width: `${analysisProgress}%` }}
-                        />
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">Analyzing Session</h2>
+                        <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                            Our AI coach is reviewing your answers, evaluating communication skills, and generating a personalized growth plan.
+                        </p>
+                        <div className="w-full space-y-2">
+                            <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                <span>Progress</span>
+                                <span>{analysisProgress}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-primary transition-all duration-300 rounded-full"
+                                    style={{ width: `${analysisProgress}%` }}
+                                ></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
