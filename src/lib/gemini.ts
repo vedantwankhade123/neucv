@@ -46,14 +46,21 @@ const cleanAndParseJSON = (text: string) => {
   }
 };
 
-// List of models to try in order of preference/speed/cost
+// Comprehensive list of models to try in order of preference
 const MODEL_FALLBACKS = [
   'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
   'gemini-1.5-flash-001',
   'gemini-1.5-flash-002',
+  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash-exp',
   'gemini-1.5-pro',
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-pro-001',
+  'gemini-1.5-pro-002',
   'gemini-1.0-pro',
-  'gemini-pro'
+  'gemini-pro',
+  'gemini-pro-vision'
 ];
 
 export const generateContent = async (prompt: string, preferredModel: string = 'gemini-1.5-flash') => {
@@ -81,7 +88,7 @@ export const generateContent = async (prompt: string, preferredModel: string = '
       lastError = error;
       
       // Only continue if it's a 404 (Not Found) or 400 (Invalid Argument/Not Supported)
-      // For 403 (Permission/Quota), we should probably stop
+      // 404 often means the model isn't available in the region or for the API key project
       const isModelError = error.message?.includes('404') || 
                            error.message?.includes('not found') || 
                            error.message?.includes('not supported');
@@ -91,12 +98,18 @@ export const generateContent = async (prompt: string, preferredModel: string = '
         throw new Error(error?.message || 'Gemini API request failed.');
       }
       
-      console.warn(`Model ${modelName} failed, trying next...`);
+      console.warn(`Model ${modelName} failed (${error.status || 'unknown'}), trying next...`);
     }
   }
 
   // If we exhausted all models
   console.error('All Gemini models failed. Last error:', lastError);
+  
+  // Provide a more helpful error message for 404s specifically
+  if (lastError?.message?.includes('404')) {
+    throw new Error('API Error: Models not found. Please ensure "Generative Language API" is ENABLED in your Google Cloud Console for this API key.');
+  }
+
   throw new Error('Failed to generate content. Unable to find a supported Gemini model for your API key/region.');
 };
 
