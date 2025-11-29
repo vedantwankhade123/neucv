@@ -68,7 +68,7 @@ const InterviewSetupPage = () => {
                     </div>
                 </header>
                 <div className="flex-grow flex items-center justify-center p-6">
-                    <Card className="p-8 text-center max-w-md shadow-lg border-none bg-white">
+                    <div className="p-8 text-center max-w-md">
                         <div className="relative mb-6 mx-auto w-20 h-20 flex items-center justify-center">
                             <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-pulse"></div>
                             <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -77,7 +77,7 @@ const InterviewSetupPage = () => {
                         <p className="text-muted-foreground text-sm leading-relaxed">
                             Our AI is analyzing your resume and generating a tailored set of questions for your role.
                         </p>
-                    </Card>
+                    </div>
                 </div>
             </div>
         );

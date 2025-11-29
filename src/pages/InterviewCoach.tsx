@@ -626,7 +626,10 @@ const InterviewCoach = () => {
             timerIntervalRef.current = window.setInterval(() => {
                 const elapsed = Math.floor((Date.now() - interviewData.startTime) / 1000);
                 setElapsedTime(elapsed);
-                if (elapsed >= interviewData.setupData.duration * 60) {
+                
+                // Check if time limit reached
+                const totalDurationSeconds = interviewData.setupData.duration * 60;
+                if (elapsed >= totalDurationSeconds) {
                     toast({ title: 'Time Up!', description: 'Interview time limit reached.', variant: 'destructive' });
                     if (interviewData.responses.length > 0) {
                         completeInterview(interviewData);
@@ -665,6 +668,10 @@ const InterviewCoach = () => {
     else if (inputMode === 'voice') statusText = "Mic is off. Tap to speak.";
     else statusText = "Waiting for answer.";
 
+    // Calculate remaining time for countdown
+    const durationSeconds = interviewData!.setupData.duration * 60;
+    const remainingSeconds = Math.max(0, durationSeconds - elapsedTime);
+
     return (
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
@@ -701,7 +708,7 @@ const InterviewCoach = () => {
                     <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
                         <Clock className="h-3.5 w-3.5 text-slate-500" />
                         <span className="text-xs font-mono font-medium text-slate-700">
-                            {formatTime(elapsedTime)}
+                            {formatTime(remainingSeconds)}
                         </span>
                     </div>
 
