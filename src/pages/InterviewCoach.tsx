@@ -178,8 +178,11 @@ const InterviewCoach = () => {
         }
     };
 
-    const speakText = useCallback((text: string) => {
-        if (!isTTSEnabled || !window.speechSynthesis) return;
+    const speakText = useCallback((text: string, onComplete?: () => void) => {
+        if (!isTTSEnabled || !window.speechSynthesis) {
+            onComplete?.();
+            return;
+        }
 
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
@@ -196,8 +199,15 @@ const InterviewCoach = () => {
         utterance.pitch = 1.0;
 
         utterance.onstart = () => setIsAiSpeaking(true);
-        utterance.onend = () => setIsAiSpeaking(false);
-        utterance.onerror = () => setIsAiSpeaking(false);
+        utterance.onend = () => {
+            setIsAiSpeaking(false);
+            if (onComplete) onComplete();
+        };
+        utterance.onerror = (e) => {
+            console.error("TTS Error", e);
+            setIsAiSpeaking(false);
+            if (onComplete) onComplete();
+        };
 
         window.speechSynthesis.speak(utterance);
     }, [isTTSEnabled]);
@@ -258,6 +268,7 @@ const InterviewCoach = () => {
                     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                     silenceTimerRef.current = setTimeout(() => {
                         stopListeningRef.current?.(); // Just stop mic on silence
+                        toast({ description: "Microphone stopped (silence detected)." });
                     }, 2500); // Stop mic after 2.5 seconds of silence
                 };
 
@@ -310,15 +321,16 @@ const InterviewCoach = () => {
             } else {
                 // Finished typing
                 setIsTyping(false);
-                speakText(questionText);
                 
-                // Auto-start mic if in voice mode
-                if (inputModeRef.current === 'voice') {
-                    // Wait a moment for TTS to start or finish
+                // Speak then listen
+                speakText(questionText, () => {
+                    // Slight delay to ensure mic doesn't pick up echo of last word
                     setTimeout(() => {
-                        startListeningRef.current?.();
-                    }, 1000); 
-                }
+                        if (inputModeRef.current === 'voice') {
+                            startListeningRef.current?.();
+                        }
+                    }, 500);
+                });
             }
         };
 
@@ -480,6 +492,7 @@ const InterviewCoach = () => {
         );
     }
 
+    const currentQuestion = interviewData!.questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex) / interviewData!.questions.length) * 100;
     const isLastQuestion = currentQuestionIndex + 1 === interviewData!.questions.length;
 
@@ -630,10 +643,10 @@ const InterviewCoach = () => {
                         <Card className="p-6 md:p-8 bg-white border-l-4 border-l-primary shadow-sm min-h-[140px] flex flex-col justify-center transition-all duration-300">
                             <div className="flex flex-wrap gap-2 mb-4">
                                 <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100">
-                                    {currentQuestion.category}
+                                    {currentQuestion?.category}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs text-muted-foreground capitalize">
-                                    {currentQuestion.difficulty}
+                                    {currentQuestion?.difficulty}
                                 </Badge>
                             </div>
                             <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
