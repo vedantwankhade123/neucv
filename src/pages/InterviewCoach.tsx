@@ -79,7 +79,7 @@ const InterviewCoach = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // --- High-Fidelity Spectral Ring Visualizer ---
+    // --- High-Fidelity Spectral Ring Visualizer (Unified for AI & User) ---
     const drawVisualizer = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -102,9 +102,11 @@ const InterviewCoach = () => {
         // Analyze Audio
         let frequencyData: number[] = new Array(128).fill(0);
         let volume = 0;
+        let mode: 'ai' | 'user' | 'idle' = 'idle';
 
         if (isListening && analyserRef.current && dataArrayRef.current) {
-            // Real microphone data
+            // User Speaking (Microphone)
+            mode = 'user';
             analyserRef.current.getByteFrequencyData(dataArrayRef.current);
             let sum = 0;
             for (let i = 0; i < 128; i++) {
@@ -113,28 +115,26 @@ const InterviewCoach = () => {
             }
             volume = sum / 128;
         } else if (isAiSpeaking) {
-            // Dynamic Simulation for AI speaking (mimics voice patterns)
+            // AI Speaking (Simulation)
+            mode = 'ai';
             const t = Date.now() / 1000;
             
             // Complex envelope to mimic speech syllables (bursty)
-            const rhythm = Math.sin(t * 12); // Fast syllable rhythm
-            const variation = Math.cos(t * 5.5); // Tonal variation
-            const noise = Math.random() * 0.2; // Texture
+            const rhythm = Math.sin(t * 12); 
+            const variation = Math.cos(t * 5.5); 
+            const noise = Math.random() * 0.2; 
             
-            // Resulting amplitude envelope
             const envelope = (Math.max(0, rhythm * variation) + 0.3 + noise);
-            
             volume = Math.min(255, envelope * 100); 
             
             for (let i = 0; i < 128; i++) {
-                // Generate spectral lines that dance
                 const offset = i * 0.15;
                 const wave = Math.sin(offset + t * 15) * Math.cos(offset * 0.5 - t * 8);
-                // Map to frequency data range 0-255
                 frequencyData[i] = Math.max(0, (wave + 1) * 80 * envelope + (Math.random() * 20));
             }
         } else {
-            // Idle state: Subtle, gentle breathing
+            // Idle state
+            mode = 'idle';
             const t = Date.now() / 2000;
             volume = Math.sin(t) * 5 + 15;
             for (let i = 0; i < 128; i++) {
@@ -142,18 +142,17 @@ const InterviewCoach = () => {
             }
         }
 
-        // Scale effect based on volume (pumping effect)
+        // Scale effect
         const scale = 1 + (volume / 255) * 0.08;
 
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.scale(scale, scale);
         
-        // Slowly rotate the entire system
         const time = Date.now() / 1000;
         ctx.rotate(time * 0.05);
 
-        ctx.globalCompositeOperation = 'screen'; // Bright additive blending
+        ctx.globalCompositeOperation = 'screen'; 
 
         // Draw Filaments
         const particles = 720;
@@ -162,37 +161,40 @@ const InterviewCoach = () => {
         for (let i = 0; i < particles; i++) {
             const angle = i * angleStep;
             
-            // Map angle to frequency data
             const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
             const freqValue = frequencyData[freqIndex] || 0;
             
-            // Brighter Color Logic
-            // Using Cyan (180) <-> Magenta (300) spectrum for a vivid neon look
+            // --- Color Logic ---
             const normAngle = (angle / (Math.PI * 2)); 
             const shiftedAngle = (normAngle + 0.2) % 1.0; 
             
             let hue;
-            if (shiftedAngle < 0.5) {
-                // Transition Magenta (300) -> Cyan (190)
-                hue = 300 - (shiftedAngle * 2) * 110; 
+            let saturation = 100;
+            
+            if (mode === 'user') {
+                // User Theme: Colorful / Warm Gradient (Purple -> Orange -> Pink)
+                // Cycle through vibrant hues
+                hue = (shiftedAngle * 360 + time * 50) % 360; 
+                saturation = 90;
+            } else if (mode === 'ai') {
+                // AI Theme: Cool Blue Gradient (Cyan -> Deep Blue)
+                // Constrain hue to blue-ish range (180 - 240)
+                hue = 190 + (Math.sin(angle + time) * 30); 
             } else {
-                // Transition Cyan (190) -> Magenta (300)
-                hue = 190 + ((shiftedAngle - 0.5) * 2) * 110;
+                // Idle Theme: Subtle Gray-Blue
+                hue = 210;
+                saturation = 20;
             }
 
-            // High Saturation for neon effect
-            const saturation = 100;
-            // Lightness boosts with audio volume for "glowing" effect
-            const lightness = 60 + (freqValue / 255) * 40; 
+            const lightness = 50 + (freqValue / 255) * 40; 
             const alpha = 0.2 + (freqValue / 255) * 0.8;
 
             ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-            ctx.lineWidth = 1.5; // Slightly thicker for brightness
+            ctx.lineWidth = 1.5;
 
-            // Filament Geometry
             const rStart = baseRadius;
-            const rEnd = baseRadius + 15 + (freqValue / 255) * 80; // Longer spikes
-            const swirl = 0.15 + (freqValue / 255) * 0.15; // More dynamic swirl
+            const rEnd = baseRadius + 15 + (freqValue / 255) * 80; 
+            const swirl = 0.15 + (freqValue / 255) * 0.15; 
             
             const x1 = Math.cos(angle) * rStart;
             const y1 = Math.sin(angle) * rStart;
@@ -208,14 +210,23 @@ const InterviewCoach = () => {
             ctx.stroke();
         }
 
-        // Inner rim light (Brighter)
+        // Inner rim light
         ctx.beginPath();
         ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
         ctx.lineWidth = 2;
         const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
-        // Bright Cyan to Bright Magenta
-        rimGradient.addColorStop(0, 'rgba(6, 182, 212, 0.8)'); // Cyan
-        rimGradient.addColorStop(1, 'rgba(217, 70, 239, 0.8)'); // Fuchsia
+        
+        if (mode === 'user') {
+             rimGradient.addColorStop(0, 'rgba(255, 100, 100, 0.8)'); // Redish
+             rimGradient.addColorStop(1, 'rgba(200, 100, 255, 0.8)'); // Purple
+        } else if (mode === 'ai') {
+             rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)'); // Cyan
+             rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)'); // Blue
+        } else {
+             rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)'); 
+             rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
+        }
+
         ctx.strokeStyle = rimGradient;
         ctx.stroke();
 
@@ -778,7 +789,7 @@ const InterviewCoach = () => {
                             <div className="absolute top-6 left-0 right-0 flex justify-center z-20">
                                 <Badge variant="outline" className={cn(
                                     "backdrop-blur-md px-4 py-1.5 text-xs uppercase tracking-wider font-semibold border-white/10 transition-all duration-300",
-                                    isListening ? "bg-green-500/10 text-green-400 border-green-500/20" : 
+                                    isListening ? "bg-purple-500/10 text-purple-400 border-purple-500/20" : 
                                     isAiSpeaking ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" :
                                     "bg-white/5 text-slate-400"
                                 )}>
@@ -861,7 +872,7 @@ const InterviewCoach = () => {
                         {/* Answer Input Area */}
                         <Card className={cn(
                             "flex-grow flex flex-col shadow-lg shadow-slate-200/40 border-0 rounded-3xl relative overflow-hidden bg-white transition-all duration-300 ring-1 ring-slate-200",
-                            isListening ? "ring-2 ring-green-500/50 shadow-green-100" : "focus-within:ring-2 focus-within:ring-primary/20"
+                            isListening ? "ring-2 ring-purple-500/50 shadow-purple-100" : "focus-within:ring-2 focus-within:ring-primary/20"
                         )}>
                             <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 backdrop-blur-sm">
                                 <div className="flex items-center gap-2 px-2">
