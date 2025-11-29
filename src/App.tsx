@@ -38,6 +38,11 @@ const App = () => (
               <Editor />
             </ProtectedRoute>
           } />
+          <Route path="/interview-coach" element={
+            <ProtectedRoute>
+              <InterviewCoach />
+            </ProtectedRoute>
+          } />
           <Route element={
             <ProtectedRoute>
               <AppLayout />
@@ -46,7 +51,6 @@ const App = () => (
             <Route path="/home" element={<Home />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/templates" element={<Templates />} />
-            <Route path="/interview-coach" element={<InterviewCoach />} />
             <Route path="/settings" element={<Settings />} />
 
             <Route path="/dashboard/pricing" element={<Pricing />} />
