@@ -80,7 +80,7 @@ const InterviewCoach = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // --- Circular Gradient Visualizer Logic ---
+    // --- High-Fidelity Spectral Ring Visualizer ---
     const drawVisualizer = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -92,63 +92,143 @@ const InterviewCoach = () => {
         const height = canvas.height;
         const centerX = width / 2;
         const centerY = height / 2;
-        const radius = Math.min(width, height) / 3;
+        
+        // Base radius for the ring (Keep void in center large)
+        const baseRadius = Math.min(width, height) / 3.2;
 
-        ctx.clearRect(0, 0, width, height);
+        // Use full clear to maintain sharp lines like the reference
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, width, height);
 
-        // Calculate average audio level
-        let avgLevel = 0;
-        if (analyserRef.current && dataArrayRef.current) {
+        // Analyze Audio
+        let frequencyData: number[] = new Array(128).fill(0);
+        let volume = 0;
+
+        if (isListening && analyserRef.current && dataArrayRef.current) {
             analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-            const sum = dataArrayRef.current.reduce((a, b) => a + b, 0);
-            avgLevel = sum / dataArrayRef.current.length;
+            let sum = 0;
+            for (let i = 0; i < 128; i++) {
+                frequencyData[i] = dataArrayRef.current[i];
+                sum += frequencyData[i];
+            }
+            volume = sum / 128;
         } else if (isAiSpeaking) {
-            avgLevel = (Math.sin(Date.now() / 100) + 1) * 30 + 40;
-        }
-
-        const scale = 1 + (avgLevel / 255) * 0.5;
-
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius * scale, 0, 2 * Math.PI);
-        
-        const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.5, centerX, centerY, radius * 2);
-        
-        if (isListening) {
-            gradient.addColorStop(0, 'rgba(74, 222, 128, 0.8)');
-            gradient.addColorStop(0.6, 'rgba(34, 197, 94, 0.4)');
-            gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
-        } else if (isAiSpeaking) {
-            gradient.addColorStop(0, 'rgba(103, 232, 249, 0.8)');
-            gradient.addColorStop(0.6, 'rgba(6, 182, 212, 0.4)');
-            gradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
+            // Simulation for AI speaking
+            const t = Date.now() / 1000;
+            volume = (Math.sin(t * 8) + 1) * 30 + 40; 
+            for (let i = 0; i < 128; i++) {
+                // Create moving waves
+                frequencyData[i] = (Math.sin(i * 0.2 + t * 5) + 1) * 60 + 50;
+            }
         } else {
-            gradient.addColorStop(0, 'rgba(148, 163, 184, 0.3)');
-            gradient.addColorStop(1, 'rgba(148, 163, 184, 0)');
-        }
-
-        ctx.fillStyle = gradient;
-        ctx.fill();
-
-        if (isListening || isAiSpeaking) {
-            const time = Date.now() / 1000;
-            const ringCount = 3;
-            for (let i = 0; i < ringCount; i++) {
-                const ringScale = (time + i * 0.5) % 2;
-                const alpha = Math.max(0, 1 - ringScale / 1.5);
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius * ringScale, 0, 2 * Math.PI);
-                ctx.strokeStyle = isListening 
-                    ? `rgba(74, 222, 128, ${alpha})` 
-                    : `rgba(103, 232, 249, ${alpha})`;
-                ctx.lineWidth = 2;
-                ctx.stroke();
+            // Idle state: Subtle breathing
+            const t = Date.now() / 2000;
+            volume = Math.sin(t) * 5 + 10;
+            for (let i = 0; i < 128; i++) {
+                frequencyData[i] = 10 + Math.random() * 5; 
             }
         }
 
+        // Scale effect based on volume
+        const scale = 1 + (volume / 255) * 0.05;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(scale, scale);
+        
+        // Slowly rotate the entire system
+        const time = Date.now() / 1000;
+        ctx.rotate(time * 0.05);
+
+        ctx.globalCompositeOperation = 'screen'; // Additive blending for the "light" look
+
+        // Draw Filaments
+        // The reference has many fine lines creating a density
+        const particles = 720; // High count for density
+        const angleStep = (Math.PI * 2) / particles;
+
+        for (let i = 0; i < particles; i++) {
+            const angle = i * angleStep;
+            
+            // Map angle to frequency data (mirrored for symmetry)
+            // We use a section of the frequency data to drive the "spikes"
+            const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
+            const freqValue = frequencyData[freqIndex] || 0;
+            
+            // Determine Color based on Angle (matching reference image)
+            // Left/Top: Green/Teal. Right/Bottom: Purple/Blue.
+            // We'll use HSL for smooth transitions
+            // Green is ~140, Blue ~220, Purple ~270
+            
+            // Normalize angle to 0-1 range for color mapping
+            const normAngle = (angle / (Math.PI * 2)); 
+            
+            let hue;
+            let saturation = 80;
+            let lightness = 50;
+
+            // Create a complex color gradient map
+            // Visualizer reference seems to have:
+            // Top-Left (Greenish) -> Bottom-Right (Purple/Blue)
+            
+            // Shift angle so gradient aligns nicely
+            const shiftedAngle = (normAngle + 0.2) % 1.0; 
+
+            if (shiftedAngle < 0.5) {
+                // Transition from Purple(280) to Green(140)
+                // This creates the distinctive split look
+                hue = 280 - (shiftedAngle * 2) * 140; 
+            } else {
+                // Transition from Green(140) back to Purple(280)
+                hue = 140 + ((shiftedAngle - 0.5) * 2) * 140;
+            }
+
+            // Boost brightness on active parts
+            lightness += (freqValue / 255) * 30;
+            const alpha = 0.1 + (freqValue / 255) * 0.5; // Transparent lines
+
+            ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+            ctx.lineWidth = 1;
+
+            // Filament Geometry
+            // Start at base radius, curve outwards
+            // The waviness depends on audio
+            
+            const rStart = baseRadius;
+            // Add noise/variation to length
+            const rEnd = baseRadius + 20 + (freqValue / 255) * 60; 
+            
+            // Swirl effect: End point is rotated relative to start point
+            const swirl = 0.1 + (freqValue / 255) * 0.1;
+            
+            const x1 = Math.cos(angle) * rStart;
+            const y1 = Math.sin(angle) * rStart;
+            
+            const x2 = Math.cos(angle + swirl) * rEnd;
+            const y2 = Math.sin(angle + swirl) * rEnd;
+
+            // Control point for curve
+            const cpX = Math.cos(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
+            const cpY = Math.sin(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+            ctx.stroke();
+        }
+
+        // Inner rim light (The bright white/blue edge of the void)
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius * 0.6, 0, 2 * Math.PI);
-        ctx.fillStyle = isListening ? '#22c55e' : isAiSpeaking ? '#06b6d4' : '#475569';
-        ctx.fill();
+        ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5;
+        // Subtle gradient stroke for the rim
+        const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
+        rimGradient.addColorStop(0, 'rgba(74, 222, 128, 0.5)'); // Greenish
+        rimGradient.addColorStop(1, 'rgba(167, 139, 250, 0.5)'); // Purplish
+        ctx.strokeStyle = rimGradient;
+        ctx.stroke();
+
+        ctx.restore();
 
         animationFrameRef.current = requestAnimationFrame(drawVisualizer);
     }, [isListening, isAiSpeaking]);
@@ -567,7 +647,6 @@ const InterviewCoach = () => {
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
             <header className="h-16 border-b px-4 lg:px-6 flex items-center justify-between bg-white z-20 shadow-sm relative">
-                {/* Left Side: Back & Branding */}
                 <div className="flex items-center gap-4 min-w-[200px]">
                     <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard" className="hover:bg-slate-100">
                         <Home className="h-5 w-5 text-slate-500" />
@@ -785,14 +864,15 @@ const InterviewCoach = () => {
                                 )}
                             </div>
 
-                            <div className="p-4 bg-slate-50/80 border-t border-slate-100 flex justify-between items-center backdrop-blur-md">
-                                <div className="text-xs text-slate-400 font-medium pl-2">
+                            {/* Improved Footer with Breathing Room */}
+                            <div className="p-6 bg-white border-t border-slate-100 flex justify-between items-center backdrop-blur-md">
+                                <div className="text-xs text-slate-400 font-medium pl-1">
                                     {currentAnswer.length} chars
                                 </div>
                                 <Button
                                     onClick={handleSubmitAnswer}
                                     disabled={!currentAnswer.trim() || isSubmitting}
-                                    className="px-8 h-10 shadow-md rounded-xl font-semibold text-sm transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90"
+                                    className="px-8 h-11 shadow-lg shadow-primary/20 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90"
                                 >
                                     {isSubmitting ? (
                                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
