@@ -2,6 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { InterviewData, InterviewResponse } from '@/types/interview';
 import { db } from './firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { createWorker } from 'tesseract.js';
 
 // Configure PDF.js worker for Vite
 // Use local worker file from public folder to avoid CORS issues
@@ -43,6 +44,27 @@ export async function parseResumePDF(file: File): Promise<string> {
             throw new Error(`Failed to parse resume PDF: ${error.message}`);
         }
         throw new Error('Failed to parse resume PDF. The file may be corrupted or password-protected.');
+    }
+}
+
+/**
+ * Parse resume Image and extract text content using OCR
+ */
+export async function parseResumeImage(file: File): Promise<string> {
+    try {
+        console.log('Starting Image OCR for file:', file.name);
+        const worker = await createWorker('eng');
+        const ret = await worker.recognize(file);
+        await worker.terminate();
+        
+        console.log('OCR complete, text length:', ret.data.text.length);
+        return ret.data.text.trim();
+    } catch (error) {
+        console.error('Image parsing error details:', error);
+        if (error instanceof Error) {
+            throw new Error(`Failed to parse resume image: ${error.message}`);
+        }
+        throw new Error('Failed to parse resume image.');
     }
 }
 
@@ -113,8 +135,9 @@ export function calculatePerformanceScore(responses: InterviewResponse[]): numbe
  */
 export function validateResumeFile(file: File): { valid: boolean; error?: string } {
     // Check file type
-    if (file.type !== 'application/pdf') {
-        return { valid: false, error: 'Please upload a PDF file' };
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+        return { valid: false, error: 'Please upload a PDF, JPEG, or PNG file' };
     }
 
     // Check file size (max 10MB)

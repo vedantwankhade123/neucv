@@ -4,10 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, FileText, CheckCircle2, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, ArrowRight, ArrowLeft, ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InterviewSetupData, InterviewLanguage, InterviewDuration, InterviewQuestionCount } from '@/types/interview';
-import { parseResumePDF, validateResumeFile, getLanguageDisplayName } from '@/lib/interview-service';
+import { parseResumePDF, parseResumeImage, validateResumeFile, getLanguageDisplayName } from '@/lib/interview-service';
 import { useToast } from '@/hooks/use-toast';
 
 interface InterviewSetupProps {
@@ -42,30 +42,37 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
 
         setIsProcessing(true);
         try {
-            const text = await parseResumePDF(file);
+            let text = '';
+            
+            if (file.type === 'application/pdf') {
+                text = await parseResumePDF(file);
+            } else if (file.type.startsWith('image/')) {
+                text = await parseResumeImage(file);
+            }
+
             setResumeFile(file);
             
             if (!text || text.trim().length === 0) {
                 setResumeText('');
                 toast({
                     title: 'Resume Uploaded',
-                    description: 'PDF uploaded successfully. Note: This appears to be an image-based PDF. You can still proceed.',
+                    description: 'File uploaded successfully. Note: We couldn\'t extract clear text. You can still proceed.',
                     variant: 'default'
                 });
             } else {
                 setResumeText(text);
                 toast({
-                    title: 'Resume Uploaded',
-                    description: 'Your resume has been successfully processed.'
+                    title: 'Resume Processed',
+                    description: 'Your resume has been successfully analyzed.'
                 });
             }
         } catch (error: any) {
-            console.error('PDF parsing error:', error);
+            console.error('Parsing error:', error);
             setResumeFile(file);
             setResumeText('');
             toast({
-                title: 'Resume Uploaded',
-                description: 'PDF uploaded. Note: Text extraction failed (image-based PDF). You can still proceed.',
+                title: 'Processing Failed',
+                description: 'We encountered an error reading the file content, but you can still proceed with a generic interview.',
                 variant: 'default'
             });
         } finally {
@@ -101,7 +108,7 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
             return;
         }
 
-        const finalResumeText = resumeText.trim() || `Resume file: ${resumeFile.name}. This appears to be an image-based PDF.`;
+        const finalResumeText = resumeText.trim() || `Resume file: ${resumeFile.name}. Text extraction was not possible or yielded empty results.`;
 
         onComplete({
             resumeFile,
@@ -154,7 +161,7 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                         <div>
                             <h3 className="text-base font-semibold mb-1.5">Step 1: Upload Your Resume</h3>
                             <p className="text-xs text-muted-foreground mb-3">
-                                Upload your resume in PDF format. We'll use it to generate personalized interview questions.
+                                Upload your resume (PDF or Image). We'll analyze it to generate personalized interview questions.
                             </p>
                         </div>
 
@@ -170,7 +177,7 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                         >
                             <input
                                 type="file"
-                                accept=".pdf"
+                                accept=".pdf,image/png,image/jpeg,image/webp"
                                 onChange={handleFileChange}
                                 className="hidden"
                                 id="resume-upload"
@@ -180,7 +187,7 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                                 {isProcessing ? (
                                     <div className="flex flex-col items-center gap-2">
                                         <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
-                                        <p className="text-xs text-muted-foreground">Processing resume...</p>
+                                        <p className="text-xs text-muted-foreground">Processing file...</p>
                                     </div>
                                 ) : resumeFile ? (
                                     <div className="flex flex-col items-center gap-2">
@@ -201,7 +208,7 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                                         </div>
                                         <div>
                                             <p className="font-medium text-sm">Drop your resume here or click to browse</p>
-                                            <p className="text-xs text-muted-foreground mt-1">PDF format, max 10MB</p>
+                                            <p className="text-xs text-muted-foreground mt-1">PDF, PNG, JPG (max 10MB)</p>
                                         </div>
                                     </div>
                                 )}
@@ -212,9 +219,20 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                             <div className="p-3 bg-muted rounded-lg">
                                 <div className="flex items-center gap-2 mb-1.5">
                                     <FileText className="h-3 w-3 text-muted-foreground" />
-                                    <span className="text-xs font-medium">Resume Preview</span>
+                                    <span className="text-xs font-medium">Extracted Text Preview</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground line-clamp-2">{resumeText}</p>
+                            </div>
+                        )}
+                        {!resumeText && resumeFile && !isProcessing && (
+                            <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                    <ImageIcon className="h-3 w-3 text-amber-600" />
+                                    <span className="text-xs font-medium text-amber-800">Visual Content Detected</span>
+                                </div>
+                                <p className="text-xs text-amber-700">
+                                    We'll use your Job Role to tailor the questions since text extraction was limited.
+                                </p>
                             </div>
                         )}
                     </div>
