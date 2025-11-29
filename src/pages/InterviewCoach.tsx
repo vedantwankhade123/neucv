@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
     Mic, MicOff, Square, Volume2, Loader2, Bot, Sparkles, 
-    CheckCircle2, ArrowRight, Clock, Settings, Home
+    CheckCircle2, ArrowRight, Clock, Settings, Home, Keyboard
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -58,7 +58,8 @@ const InterviewCoach = () => {
     // Status
     const [isListening, setIsListening] = useState(false);
     const [isAiSpeaking, setIsAiSpeaking] = useState(false);
-    
+    const [audioLevel, setAudioLevel] = useState(0);
+
     // Interview flow
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [displayedQuestion, setDisplayedQuestion] = useState('');
@@ -79,7 +80,7 @@ const InterviewCoach = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // --- Spectral Ring Visualizer Logic ---
+    // --- Circular Gradient Visualizer Logic ---
     const drawVisualizer = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -91,131 +92,63 @@ const InterviewCoach = () => {
         const height = canvas.height;
         const centerX = width / 2;
         const centerY = height / 2;
-        
-        // Base radius for the ring
-        const baseRadius = Math.min(width, height) / 3.5;
+        const radius = Math.min(width, height) / 3;
 
-        // Clear with a very slight fade for trail effect, or full clear
-        // Using full clear for crisp lines on black background
-        ctx.fillStyle = '#000000'; // Match card background
-        ctx.fillRect(0, 0, width, height);
+        ctx.clearRect(0, 0, width, height);
 
-        // Analyze Audio
-        let frequencyData: number[] = new Array(128).fill(0);
-        let volume = 0;
-
-        if (isListening && analyserRef.current && dataArrayRef.current) {
+        // Calculate average audio level
+        let avgLevel = 0;
+        if (analyserRef.current && dataArrayRef.current) {
             analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-            // Copy to local array and calculate volume
-            let sum = 0;
-            for (let i = 0; i < 128; i++) {
-                frequencyData[i] = dataArrayRef.current[i];
-                sum += frequencyData[i];
-            }
-            volume = sum / 128;
+            const sum = dataArrayRef.current.reduce((a, b) => a + b, 0);
+            avgLevel = sum / dataArrayRef.current.length;
         } else if (isAiSpeaking) {
-            // Simulate lively data for AI
-            const t = Date.now() / 1000;
-            volume = (Math.sin(t * 5) + 1) * 40 + 20; // Base volume modulation
-            for (let i = 0; i < 128; i++) {
-                // Perlin-like noise simulation
-                frequencyData[i] = (Math.sin(i * 0.1 + t * 2) + Math.cos(i * 0.05 - t)) * 50 + 100;
-            }
-        } else {
-            // Idle state: subtle breathing
-            const t = Date.now() / 2000;
-            volume = Math.sin(t) * 5 + 10;
-            for (let i = 0; i < 128; i++) {
-                frequencyData[i] = 20; // minimal noise
-            }
+            avgLevel = (Math.sin(Date.now() / 100) + 1) * 30 + 40;
         }
 
-        // Normalize volume for scaling
-        const scale = 1 + (volume / 255) * 0.2;
+        const scale = 1 + (avgLevel / 255) * 0.5;
 
-        // --- Draw The Spectral Ring ---
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius * scale, 0, 2 * Math.PI);
         
-        // Save context for glowing effect
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.scale(scale, scale);
-
-        // We will draw multiple overlapping sine waves wrapped in a circle
-        const time = Date.now() / 1000;
+        const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.5, centerX, centerY, radius * 2);
         
-        // Define gradients based on state
-        const gradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
         if (isListening) {
-            // User speaking: Green/Blue theme
-            gradient.addColorStop(0, '#4ade80'); // Green
-            gradient.addColorStop(0.5, '#60a5fa'); // Blue
-            gradient.addColorStop(1, '#a78bfa'); // Purple
+            gradient.addColorStop(0, 'rgba(74, 222, 128, 0.8)');
+            gradient.addColorStop(0.6, 'rgba(34, 197, 94, 0.4)');
+            gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
         } else if (isAiSpeaking) {
-            // AI speaking: Cyan/Purple/Pink (Matches reference image vibe)
-            gradient.addColorStop(0, '#22d3ee'); // Cyan
-            gradient.addColorStop(0.5, '#818cf8'); // Indigo
-            gradient.addColorStop(1, '#e879f9'); // Pink
+            gradient.addColorStop(0, 'rgba(103, 232, 249, 0.8)');
+            gradient.addColorStop(0.6, 'rgba(6, 182, 212, 0.4)');
+            gradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
         } else {
-            // Idle: Dim Purple/Grey
-            gradient.addColorStop(0, '#4b5563'); 
-            gradient.addColorStop(1, '#a78bfa'); 
+            gradient.addColorStop(0, 'rgba(148, 163, 184, 0.3)');
+            gradient.addColorStop(1, 'rgba(148, 163, 184, 0)');
         }
 
-        ctx.strokeStyle = gradient;
-        ctx.globalCompositeOperation = 'screen'; // Additive blending for glow
+        ctx.fillStyle = gradient;
+        ctx.fill();
 
-        // Draw multiple layers of "filaments"
-        const layers = 3;
-        for (let l = 0; l < layers; l++) {
-            ctx.beginPath();
-            const points = 180; // Resolution of the ring
-            const angleStep = (Math.PI * 2) / points;
-            
-            ctx.lineWidth = isListening || isAiSpeaking ? 2 : 1;
-            
-            // Varied line opacity based on audio level
-            ctx.globalAlpha = 0.6 + (volume / 500);
-
-            for (let i = 0; i <= points; i++) {
-                const angle = i * angleStep;
-                
-                // Map angle to frequency index (mirrored for symmetry)
-                let freqIndex = Math.floor((Math.abs(Math.sin(angle * 2)) * 64)); 
-                const value = frequencyData[freqIndex] || 0;
-
-                // Complex wave function for the "filament" look
-                // Combines base circle + audio frequency displacement + sine wave rotation
-                const waveOffset = Math.sin(angle * 10 + time * (l + 1)) * (value / 5);
-                const noiseOffset = Math.cos(angle * 25 - time * 2) * (value / 8);
-                
-                const r = baseRadius + waveOffset + noiseOffset + (l * 5); // Offset layers slightly
-
-                const x = Math.cos(angle) * r;
-                const y = Math.sin(angle) * r;
-
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            }
-            
-            ctx.closePath();
-            ctx.stroke();
-        }
-
-        // Inner Glow Circle
         if (isListening || isAiSpeaking) {
-            ctx.beginPath();
-            ctx.arc(0, 0, baseRadius * 0.85, 0, Math.PI * 2);
-            ctx.fillStyle = isListening ? 'rgba(74, 222, 128, 0.05)' : 'rgba(34, 211, 238, 0.05)';
-            ctx.fill();
-            
-            // Add a subtle outer glow using shadow
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = isListening ? '#4ade80' : '#22d3ee';
-            ctx.stroke(); // Stroke the inner circle lightly
-            ctx.shadowBlur = 0; // Reset
+            const time = Date.now() / 1000;
+            const ringCount = 3;
+            for (let i = 0; i < ringCount; i++) {
+                const ringScale = (time + i * 0.5) % 2;
+                const alpha = Math.max(0, 1 - ringScale / 1.5);
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius * ringScale, 0, 2 * Math.PI);
+                ctx.strokeStyle = isListening 
+                    ? `rgba(74, 222, 128, ${alpha})` 
+                    : `rgba(103, 232, 249, ${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
         }
 
-        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius * 0.6, 0, 2 * Math.PI);
+        ctx.fillStyle = isListening ? '#22c55e' : isAiSpeaking ? '#06b6d4' : '#475569';
+        ctx.fill();
 
         animationFrameRef.current = requestAnimationFrame(drawVisualizer);
     }, [isListening, isAiSpeaking]);
@@ -228,11 +161,11 @@ const InterviewCoach = () => {
     }, [drawVisualizer]);
 
     // --- Audio Logic ---
-
     const stopAudioAnalysis = useCallback(() => {
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
         }
+        setAudioLevel(0);
     }, []);
 
     const stopTTS = useCallback(() => {
@@ -250,25 +183,23 @@ const InterviewCoach = () => {
             clearTimeout(silenceTimerRef.current);
         }
         setIsListening(false);
-    }, []);
+        stopAudioAnalysis();
+    }, [stopAudioAnalysis]);
 
     useEffect(() => {
         stopListeningRef.current = stopListening;
     }, [stopListening]);
 
-    // Initialize Data
     useEffect(() => {
         const data = location.state?.interviewData as InterviewData;
         if (data) {
             setInterviewData(data);
             setQuestionStartTime(Date.now());
-            
             const settings = getAutoSaveSettings();
             setIsTTSEnabled(settings.interviewTTS);
         } else {
             navigate('/dashboard/interview');
         }
-        
         return () => {
             stopAudioAnalysis();
             stopTTS();
@@ -306,6 +237,22 @@ const InterviewCoach = () => {
             
             const bufferLength = analyserRef.current.frequencyBinCount;
             dataArrayRef.current = new Uint8Array(bufferLength);
+
+            const updateVolume = () => {
+                if (!analyserRef.current || !dataArrayRef.current) return;
+                analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+                
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArrayRef.current[i];
+                }
+                const average = sum / bufferLength;
+                const level = Math.min(100, Math.round(average * 2)); 
+                setAudioLevel(level);
+                
+                animationFrameRef.current = requestAnimationFrame(updateVolume);
+            };
+            updateVolume();
         } catch (error) {
             console.error("Error starting audio analysis:", error);
         }
@@ -604,7 +551,7 @@ const InterviewCoach = () => {
         );
     }
 
-    const progress = ((currentQuestionIndex) / interviewData!.questions.length) * 100;
+    const progress = ((currentQuestionIndex + 1) / interviewData!.questions.length) * 100;
     const isLastQuestion = currentQuestionIndex + 1 === interviewData!.questions.length;
 
     let statusText = "Ready";
@@ -620,7 +567,8 @@ const InterviewCoach = () => {
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
             <header className="h-16 border-b px-4 lg:px-6 flex items-center justify-between bg-white z-20 shadow-sm relative">
-                <div className="flex items-center gap-4">
+                {/* Left Side: Back & Branding */}
+                <div className="flex items-center gap-4 min-w-[200px]">
                     <Button variant="ghost" size="icon" onClick={handleExit} title="Back to Dashboard" className="hover:bg-slate-100">
                         <Home className="h-5 w-5 text-slate-500" />
                     </Button>
@@ -638,15 +586,24 @@ const InterviewCoach = () => {
                     </div>
                 </div>
                 
-                {/* Timer Display */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-1.5 rounded-full border border-slate-200 shadow-sm hover:border-primary/20 transition-colors">
-                    <Clock className="h-4 w-4 text-primary/70 animate-[pulse_3s_infinite]" />
-                    <span className="text-sm font-mono font-semibold text-slate-700 min-w-[3rem] text-center">
-                        {formatTime(elapsedTime)}
-                    </span>
+                {/* Center: Progress Bar */}
+                <div className="flex-1 max-w-md mx-4 hidden md:flex flex-col gap-1.5 justify-center">
+                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        <span>Question {currentQuestionIndex + 1}</span>
+                        <span>{interviewData?.questions.length} Total</span>
+                    </div>
+                    <Progress value={progress} className="h-1.5" />
                 </div>
                 
-                <div className="flex items-center gap-2 sm:gap-3">
+                {/* Right Side: Timer & Controls */}
+                <div className="flex items-center gap-3 min-w-[200px] justify-end">
+                    <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+                        <Clock className="h-3.5 w-3.5 text-slate-500" />
+                        <span className="text-xs font-mono font-medium text-slate-700">
+                            {formatTime(elapsedTime)}
+                        </span>
+                    </div>
+
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900">
@@ -677,13 +634,12 @@ const InterviewCoach = () => {
                 </div>
             </header>
 
-            {/* Main Workspace */}
-            <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto bg-slate-50/50 flex flex-col items-center">
-                {/* Added py-4 to ensure spacing from header */}
-                <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-6 lg:gap-8 h-full max-h-[700px] min-h-[500px] py-2">
+            {/* Main Workspace - Full Width */}
+            <main className="flex-grow p-4 md:p-6 overflow-hidden bg-slate-50/50">
+                <div className="w-full h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
                     
-                    {/* Left: Modern AI Visualizer */}
-                    <div className="w-full lg:w-5/12 flex flex-col gap-4 h-full">
+                    {/* Left: AI Avatar & Visualization */}
+                    <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[300px]">
                         <Card className="flex-grow bg-black rounded-3xl border-0 shadow-2xl relative flex flex-col items-center justify-center p-0 overflow-hidden group ring-1 ring-white/10">
                             {/* Header Status */}
                             <div className="absolute top-6 left-0 right-0 flex justify-center z-20">
@@ -707,52 +663,62 @@ const InterviewCoach = () => {
                                 />
                             </div>
 
+                            {/* Center Icon Overlay */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20">
+                                {isListening ? (
+                                    <Mic className="h-8 w-8 text-white/90 animate-pulse" />
+                                ) : isAiSpeaking ? (
+                                    <Volume2 className="h-8 w-8 text-white/90 animate-bounce" />
+                                ) : (
+                                    <Bot className="h-8 w-8 text-white/50" />
+                                )}
+                            </div>
+
+                            {/* Status Text */}
+                            <div className="absolute bottom-10 left-0 right-0 text-center z-20 px-4">
+                                <h3 className="text-white font-medium text-lg tracking-wide transition-all min-h-[1.75rem]">
+                                    {statusText}
+                                </h3>
+                                <p className="text-slate-400 text-sm min-h-[1.25rem] opacity-80 mt-1">
+                                    {inputMode === 'voice' && isListening ? "Speak naturally and clearly" : ""}
+                                </p>
+                            </div>
+
                             {/* Background decoration - Deep Void */}
                             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900/50 via-black to-black pointer-events-none" />
                         </Card>
 
-                        {/* Coach Tip */}
-                        <Card className="p-5 bg-white border-slate-200/60 shadow-sm flex-grow-0 h-fit rounded-2xl relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
-                            <div className="flex gap-4 items-start relative z-10">
-                                <div className="bg-blue-50 p-2.5 rounded-xl h-fit text-blue-600 shrink-0 border border-blue-100 shadow-sm">
-                                    <Sparkles className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-sm text-slate-900 mb-1">Coach's Tip</h4>
-                                    <p className="text-sm text-slate-600 leading-relaxed">
-                                        Use the STAR method (Situation, Task, Action, Result) to structure your answers effectively.
-                                    </p>
-                                </div>
+                        {/* Coach Tip - Smaller and integrated */}
+                        <div className="bg-white border border-slate-200/60 shadow-sm rounded-xl p-4 flex gap-3 items-start">
+                            <div className="bg-blue-50 p-2 rounded-lg text-blue-600 shrink-0">
+                                <Sparkles className="h-4 w-4" />
                             </div>
-                        </Card>
+                            <div>
+                                <h4 className="font-bold text-xs text-slate-900 mb-0.5 uppercase tracking-wide">Pro Tip</h4>
+                                <p className="text-sm text-slate-600 leading-snug">
+                                    Use the STAR method (Situation, Task, Action, Result) to structure your answers effectively.
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Right: Question & Input */}
-                    <div className="w-full lg:w-7/12 flex flex-col gap-6 h-full min-h-[500px]">
-                        {/* Progress */}
-                        <div className="flex items-center gap-4 px-1">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                                Question {currentQuestionIndex + 1} / {interviewData!.questions.length}
-                            </span>
-                            <Progress value={progress} className="h-2 flex-grow bg-slate-200" indicatorClassName="bg-primary transition-all duration-500" />
-                            <span className="text-xs font-mono font-medium text-slate-500">{Math.round(progress)}%</span>
-                        </div>
-
+                    <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[400px]">
+                        
                         {/* Question Card */}
-                        <Card className="p-8 bg-white border-0 shadow-lg shadow-slate-200/40 rounded-3xl flex flex-col justify-center min-h-[180px] relative overflow-hidden transition-all group hover:shadow-xl hover:shadow-slate-200/50">
+                        <Card className="p-6 md:p-8 bg-white border-0 shadow-lg shadow-slate-200/40 rounded-3xl flex flex-col justify-center min-h-[200px] relative overflow-hidden transition-all group hover:shadow-xl hover:shadow-slate-200/50">
                             <div className="absolute top-0 left-0 w-1.5 h-full bg-primary transition-all group-hover:w-2" />
-                            <div className="flex flex-wrap gap-2 mb-5">
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 px-3 py-1 text-xs font-medium">
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 px-2.5 py-0.5 text-xs font-medium">
                                     {currentQuestion?.category}
                                 </Badge>
-                                <Badge variant="outline" className="text-xs text-slate-500 capitalize px-3 py-1 bg-slate-50 border-slate-200">
+                                <Badge variant="outline" className="text-xs text-slate-500 capitalize px-2.5 py-0.5 bg-slate-50 border-slate-200">
                                     {currentQuestion?.difficulty}
                                 </Badge>
                             </div>
                             <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
                                 {displayedQuestion}
-                                {isTyping && <span className="inline-block w-2.5 h-6 ml-1.5 bg-primary align-middle animate-pulse rounded-full" />}
+                                {isTyping && <span className="inline-block w-2 h-5 ml-1 bg-primary align-middle animate-pulse rounded-full" />}
                             </h2>
                         </Card>
 
