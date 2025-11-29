@@ -15,15 +15,8 @@ export default function ResumeUploader({ onFileSelect, isProcessing }: ResumeUpl
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    const ACCEPTED_TYPES = [
-        'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ];
 
     const validateFile = (file: File): string | null => {
-        if (!ACCEPTED_TYPES.includes(file.type)) {
-            return 'Please upload a PDF or DOCX file';
-        }
         if (file.size > MAX_FILE_SIZE) {
             return 'File size must be less than 10MB';
         }
@@ -93,10 +86,10 @@ export default function ResumeUploader({ onFileSelect, isProcessing }: ResumeUpl
         <div className="w-full max-w-2xl mx-auto">
             <Card
                 className={`border-2 border-dashed transition-colors ${isDragging
-                        ? 'border-primary bg-primary/5'
-                        : error
-                            ? 'border-destructive'
-                            : 'border-muted-foreground/25'
+                    ? 'border-primary bg-primary/5'
+                    : error
+                        ? 'border-destructive'
+                        : 'border-muted-foreground/25'
                     }`}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
@@ -116,7 +109,7 @@ export default function ResumeUploader({ onFileSelect, isProcessing }: ResumeUpl
                                     Drag and drop your resume here, or click to browse
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                    Supports PDF and DOCX files (max 10MB)
+                                    Supports all file types (max 10MB)
                                 </p>
                             </div>
 
@@ -142,7 +135,6 @@ export default function ResumeUploader({ onFileSelect, isProcessing }: ResumeUpl
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept=".pdf,.docx"
                                 onChange={handleFileInputChange}
                                 className="hidden"
                                 disabled={isProcessing}

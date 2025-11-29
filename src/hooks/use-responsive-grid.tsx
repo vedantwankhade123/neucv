@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useSidebar } from '@/contexts/SidebarContext';
 
 interface GridConfig {
   columns: number;
@@ -8,7 +7,6 @@ interface GridConfig {
 }
 
 export const useResponsiveGrid = (minCardWidth: number = 280): GridConfig => {
-  const { isCollapsed } = useSidebar();
   const [columns, setColumns] = useState(1);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
 
@@ -24,8 +22,8 @@ export const useResponsiveGrid = (minCardWidth: number = 280): GridConfig => {
   }, []);
 
   useEffect(() => {
-    // Sidebar widths: collapsed = 80px (w-20), expanded = 288px (w-72)
-    const sidebarWidth = isCollapsed ? 80 : 288;
+    // Sidebar is always expanded: 256px (w-64) + 32px margins (16px on each side)
+    const sidebarWidth = 288; // 256px sidebar + 32px total margins
     const availableWidth = windowWidth - sidebarWidth;
     
     // Calculate optimal number of columns based on available width and min card width
@@ -53,7 +51,7 @@ export const useResponsiveGrid = (minCardWidth: number = 280): GridConfig => {
     }
     
     setColumns(finalColumns);
-  }, [windowWidth, isCollapsed, minCardWidth]);
+  }, [windowWidth, minCardWidth]);
 
   return {
     columns,

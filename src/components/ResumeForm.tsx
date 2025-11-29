@@ -116,13 +116,13 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsSummaryDialogOpen(false);
     try {
       // Use job role from resumeData.title if not provided in dialog, or use dialog value
-      const jobTitle = data.jobTitle || resumeData.title || '';
-      const summary = await generateResumeSummary(resumeData, "gemini-3-pro-preview", {
-        jobTitle: jobTitle,
-        experience: data.experience,
-        achievements: data.achievements,
-        tone: data.tone
-      });
+      const summary = await generateResumeSummary(
+        jobTitle,
+        data.experience || resumeData.experience,
+        resumeData.education,
+        resumeData.skills,
+        undefined // Use default model
+      );
       setResumeData(prev => ({ ...prev, summary }));
       toast({ title: "Summary Generated", description: "AI analyzed your resume and generated a professional summary." });
     } catch (error: any) {

@@ -6,8 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Editor from "./pages/Editor";
-import CoverLetterEditor from "./pages/CoverLetterEditor";
-import CoverLetterTemplates from "./pages/CoverLetterTemplates";
 import NotFound from "./pages/NotFound";
 import AppLayout from "./components/AppLayout";
 import Templates from "./pages/Templates";
@@ -40,11 +38,6 @@ const App = () => (
               <Editor />
             </ProtectedRoute>
           } />
-          <Route path="/cover-letter/:templateId/:coverLetterId?" element={
-            <ProtectedRoute>
-              <CoverLetterEditor />
-            </ProtectedRoute>
-          } />
           <Route element={
             <ProtectedRoute>
               <AppLayout />
@@ -53,7 +46,6 @@ const App = () => (
             <Route path="/home" element={<Home />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/templates" element={<Templates />} />
-            <Route path="/cover-letter-templates" element={<CoverLetterTemplates />} />
             <Route path="/interview-coach" element={<InterviewCoach />} />
             <Route path="/settings" element={<Settings />} />
 

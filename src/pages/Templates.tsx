@@ -106,12 +106,14 @@ const Templates = () => {
   );
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="bg-transparent p-4 hidden md:flex items-center justify-between flex-shrink-0 no-print h-16">
-        <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
-        <UserNav />
+    <div className="flex flex-col min-h-full bg-slate-50">
+      <header className="bg-transparent p-4 hidden md:block flex-shrink-0 no-print h-16">
+        <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
+          <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
+          <UserNav />
+        </div>
       </header>
-      <main className="flex-grow p-4 md:p-8 overflow-y-auto bg-muted/40">
+      <main className="flex-grow p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Choose a Template to Get Started</h2>
           <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">Select a design you like. You can always change styles and colors later in the editor.</p>
@@ -169,7 +171,7 @@ const Templates = () => {
           )}
         </div>
       </main>
-      
+
       {/* Loading Overlay */}
       {isCreatingResume && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
@@ -193,12 +195,18 @@ const Templates = () => {
           </div>
         </div>
       )}
-      
+
       <TemplatePreviewModal
         isOpen={!!previewingTemplateId}
         onClose={() => setPreviewingTemplateId(null)}
         templateId={previewingTemplateId}
         onSelectTemplate={handleSelectTemplate}
+      />
+
+      <JobRoleDialog
+        open={isJobRoleDialogOpen}
+        onOpenChange={setIsJobRoleDialogOpen}
+        onContinue={handleJobRoleContinue}
       />
     </div>
   );

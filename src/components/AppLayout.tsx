@@ -53,19 +53,18 @@ const AppLayout = () => {
 
   return (
     <SidebarProvider isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed}>
-      <div className="min-h-screen bg-background">
+      <div className="h-screen w-full bg-white overflow-hidden relative">
         <AppSidebar isMobileNavOpen={isMobileNavOpen} setIsMobileNavOpen={setIsMobileNavOpen} />
         <MobileHeader onMenuClick={() => setIsMobileNavOpen(true)} />
-        <div
+        <main
           className={cn(
-            "transition-[margin-left] ease-[cubic-bezier(0.32,0.72,0,1)] duration-500",
-            "md:ml-80", // Default for expanded sidebar (72 + 8 for margin/gap)
-            isCollapsed && "md:ml-28", // Margin for collapsed sidebar (20 + 8)
+            "h-full overflow-y-auto overflow-x-hidden bg-white",
+            "md:ml-[calc(16rem+2rem)]", // Margin to match sidebar width (256px + 32px for margins)
             "pt-16 md:pt-0" // Padding for mobile header
           )}
         >
           <Outlet />
-        </div>
+        </main>
       </div>
     </SidebarProvider>
   );

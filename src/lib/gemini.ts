@@ -1,16 +1,54 @@
-﻿import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 if (!API_KEY) {
   console.error('Gemini API key is not configured');
+} else {
+  console.log('Gemini Config Status:', {
+    keyPresent: !!API_KEY,
+    keyLength: API_KEY ? API_KEY.length : 0,
+    keyPrefix: API_KEY ? API_KEY.substring(0, 5) + '...' : 'N/A'
+  });
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY || '');
 
-export const generateContent = async (prompt: string, modelName: string = 'gemini-1.5-pro') => {
+// Helper to clean and parse JSON from AI response
+const cleanAndParseJSON = (text: string) => {
+  try {
+    // Remove markdown code blocks if present
+    let cleaned = text.replace(/```json\n?|```/g, '').trim();
+    
+    // Find the JSON object or array
+    const firstBrace = cleaned.indexOf('{');
+    const firstBracket = cleaned.indexOf('[');
+    
+    let startIndex = -1;
+    // Determine which comes first to decide if it's an object or array
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIndex = firstBrace;
+    } else if (firstBracket !== -1) {
+      startIndex = firstBracket;
+    }
+
+    if (startIndex !== -1) {
+      const lastBrace = cleaned.lastIndexOf('}');
+      const lastBracket = cleaned.lastIndexOf(']');
+      const endIndex = Math.max(lastBrace, lastBracket) + 1;
+      cleaned = cleaned.substring(startIndex, endIndex);
+    }
+
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error("JSON Parse Error on text:", text);
+    throw new Error("Failed to parse AI response. The model might have returned invalid JSON.");
+  }
+};
+
+export const generateContent = async (prompt: string, modelName: string = 'gemini-1.5-flash') => {
   if (!API_KEY) {
-    throw new Error('Gemini API key is not configured. Please add VITE_GEMINI_API_KEY to your .env file');
+    throw new Error('Gemini API key is not configured. Please add VITE_GEMINI_API_KEY to your .env file and RESTART the dev server.');
   }
 
   try {
@@ -19,38 +57,49 @@ export const generateContent = async (prompt: string, modelName: string = 'gemin
     const response = result.response;
     return response.text();
   } catch (error: any) {
-    console.error('Gemini API Error:', error);
-    throw new Error(error?.message || 'Failed to generate content');
+    console.error('Gemini API Error Details:', {
+      message: error.message,
+      status: error.status,
+      statusText: error.statusText,
+      fullError: error
+    });
+    throw new Error(error?.message || 'Failed to generate content. Please check your API key and quota.');
   }
 };
 
-export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Create a professional summary for a ${jobTitle}. Return ONLY the summary text.`;
+export const generateResumeSummary = async (jobTitle: string, experience: any[], education: any[], skills: string[], modelName: string = 'gemini-1.5-flash') => {
+  const prompt = `Create a professional summary for a ${jobTitle}. Return ONLY the summary text, no markdown, no quotes.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateExperienceDescription = async (role: string, company: string, existingDescription: string = '', resumeContext?: any, startDate?: string, endDate?: string, modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Generate bullet points for ${role} at ${company}. Return ONLY bullet points.`;
+export const generateExperienceDescription = async (role: string, company: string, existingDescription: string = '', resumeContext?: any, startDate?: string, endDate?: string, modelName: string = 'gemini-1.5-flash') => {
+  const prompt = `Generate professional bullet points for the role of ${role} at ${company}. Return ONLY the bullet points, starting with action verbs. Do not include introductory text.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateSkills = async (jobTitle: string, modelName: string = 'gemini-1.5-pro'): Promise<string> => {
-  const prompt = `List skills for ${jobTitle}. Return comma-separated list.`;
-  return generateContent(prompt, modelName);
-};
-
-export const generateContextAwareSkills = async (resumeData: any, count: number = 6, modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Generate ${count} skills for resume. Return comma-separated.`;
+export const generateSkills = async (jobTitle: string, modelName: string = 'gemini-1.5-flash'): Promise<string> => {
+  const prompt = `List top technical and soft skills for a ${jobTitle}. Return a simple comma-separated list.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateEducationDescription = async (degree: string, institution: string, keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Education description for ${degree} at ${institution}.`;
+export const generateContextAwareSkills = async (resumeData: any, count: number = 6, modelName: string = 'gemini-1.5-flash') => {
+  const prompt = `Based on the following resume data, generate ${count} relevant skills. Return ONLY a comma-separated list.
+  
+  Resume Data:
+  ${JSON.stringify(resumeData).substring(0, 1000)}...
+  `;
   return (await generateContent(prompt, modelName)).trim();
 };
 
-export const generateCustomSectionContent = async (sectionTitle: string, sectionType: 'text' | 'list' | 'experience', keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Generate ${sectionType} content for ${sectionTitle}.`;
+export const generateEducationDescription = async (degree: string, institution: string, keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash') => {
+  const prompt = `Generate a brief description for an education entry: ${degree} at ${institution}. Include key achievements or coursework if implied. Return ONLY the text.`;
+  return (await generateContent(prompt, modelName)).trim();
+};
+
+export const generateCustomSectionContent = async (sectionTitle: string, sectionType: 'text' | 'list' | 'experience', keywords: string = '', resumeContext?: any, modelName: string = 'gemini-1.5-flash') => {
+  const prompt = `Generate content for a resume section titled "${sectionTitle}". The format is ${sectionType}. 
+  Keywords/Context: ${keywords}
+  Return ONLY the content text/bullet points suitable for a resume.`;
   return (await generateContent(prompt, modelName)).trim();
 };
 
@@ -73,25 +122,159 @@ export const processResumeAgentPrompt = async (
   userPrompt: string,
   currentResumeData: any,
   conversationHistory: any[] = [],
-  modelName: string = 'gemini-1.5-pro'
+  modelName: string = 'gemini-1.5-flash'
 ): Promise<ResumeAgentResponse> => {
-  return {
-    message: 'I can help with your resume.',
-    needsClarification: false
+  const historyText = conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n');
+
+  const prompt = `You are an expert resume writer AI agent. Help the user improve their resume.
+  
+  Current Resume Data:
+  ${JSON.stringify(currentResumeData, null, 2)}
+  
+  Conversation History:
+  ${historyText}
+  
+  User Request: ${userPrompt}
+  
+  Analyze the request.
+  Return a JSON object with this structure:
+  {
+    "message": "Response to user",
+    "updates": {
+      "personalInfo": {}, 
+      "title": "New Title",
+      "summary": "New Summary",
+      "experience": [], 
+      "education": [],
+      "skills": [],
+      "customSections": []
+    },
+    "needsClarification": boolean,
+    "clarificationQuestions": ["Question 1"]
+  }
+  
+  Return ONLY valid JSON.
+  `;
+
+  try {
+    const responseText = await generateContent(prompt, modelName);
+    const parsed = cleanAndParseJSON(responseText);
+    
+    return {
+      message: parsed.message || "I've processed your request.",
+      updates: parsed.updates || {},
+      needsClarification: parsed.needsClarification || false,
+      clarificationQuestions: parsed.clarificationQuestions || []
+    };
+  } catch (error) {
+    console.error("Error processing resume agent prompt:", error);
+    return {
+      message: "I'm sorry, I encountered an error while processing your request. Please try again.",
+      needsClarification: false
+    };
+  }
+};
+
+// ============================================
+// Interview Coach AI Functions
+// ============================================
+
+export const generateInterviewQuestions = async (
+  resumeText: string,
+  jobRole: string,
+  numQuestions: number,
+  language: string,
+  modelName: string = 'gemini-1.5-flash'
+) => {
+  const languageInstructions = {
+    english: 'Generate questions in English.',
+    hinglish: 'Generate questions in Hinglish (mix of Hindi and English, written in English script).',
+    marathi: 'Generate questions in Marathi language.',
+    hindi: 'Generate questions in Hindi language.'
   };
+
+  const prompt = `You are an expert interview coach. Generate ${numQuestions} interview questions based on:
+  
+Resume Text Summary: ${resumeText.substring(0, 1500)}
+Job Role: ${jobRole}
+
+${languageInstructions[language as keyof typeof languageInstructions] || 'Generate in English.'}
+
+Return ONLY a JSON array:
+[
+  {
+    "id": "1",
+    "question": "Question text",
+    "category": "Behavioral/Technical/Situational",
+    "difficulty": "easy/medium/hard"
+  }
+]`;
+
+  try {
+    const response = await generateContent(prompt, modelName);
+    return cleanAndParseJSON(response);
+  } catch (error) {
+    console.error('Error generating questions:', error);
+    throw error;
+  }
 };
 
-export const generateCoverLetterOpening = async (position: string, companyName: string, resumeData?: any, coverLetterData?: any, modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Cover letter opening for ${position} at ${companyName}.`;
-  return (await generateContent(prompt, modelName)).trim();
+export const evaluateInterviewResponse = async (
+  question: string,
+  response: string,
+  language: string,
+  modelName: string = 'gemini-1.5-flash'
+) => {
+  const prompt = `Evaluate this interview response.
+  
+Question: ${question}
+Response: ${response}
+Language: ${language}
+
+Return ONLY a JSON object:
+{
+  "score": number (0-100),
+  "feedback": "Feedback text",
+  "strengths": ["string"],
+  "improvements": ["string"]
+}`;
+
+  try {
+    const responseText = await generateContent(prompt, modelName);
+    return cleanAndParseJSON(responseText);
+  } catch (error) {
+    console.error('Error evaluating response:', error);
+    throw error;
+  }
 };
 
-export const generateCoverLetterBody = async (position: string, companyName: string, resumeData?: any, coverLetterData?: any, modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Cover letter body for ${position} at ${companyName}.`;
-  return (await generateContent(prompt, modelName)).trim();
-};
+export const generateInterviewReport = async (
+  interviewData: any,
+  modelName: string = 'gemini-1.5-flash'
+) => {
+  const { setupData, questions, responses } = interviewData;
 
-export const generateCoverLetterClosing = async (position: string, companyName: string, resumeData?: any, coverLetterData?: any, modelName: string = 'gemini-1.5-pro') => {
-  const prompt = `Cover letter closing for ${position} at ${companyName}.`;
-  return (await generateContent(prompt, modelName)).trim();
+  const prompt = `Generate an interview report for ${setupData.jobRole}.
+  
+Responses Summary:
+${questions.map((q: any, i: number) => `Q: ${q.question}\nA: ${responses[i]?.answer || 'No answer'}`).join('\n').substring(0, 3000)}
+
+Return ONLY a JSON object:
+{
+  "overallScore": number (0-100),
+  "strengths": ["string"],
+  "areasForImprovement": ["string"],
+  "recommendations": ["string"],
+  "performanceByCategory": [
+    {"category": "string", "score": number}
+  ]
+}`;
+
+  try {
+    const responseText = await generateContent(prompt, modelName);
+    return cleanAndParseJSON(responseText);
+  } catch (error) {
+    console.error('Error generating report:', error);
+    throw error;
+  }
 };

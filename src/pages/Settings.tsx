@@ -120,14 +120,16 @@ const Settings = () => {
   const cardClasses = "shadow-sm";
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <header className="bg-transparent p-4 hidden md:flex items-center justify-between flex-shrink-0 no-print h-16 sticky top-0 z-10">
-        <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-        <div className="flex items-center gap-4">
-          <UserNav />
+    <div className="flex flex-col min-h-full bg-slate-50">
+      <header className="bg-transparent p-4 hidden md:block flex-shrink-0 no-print h-16 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
+          <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+          <div className="flex items-center gap-4">
+            <UserNav />
+          </div>
         </div>
       </header>
-      <main className="flex-grow p-4 md:p-8 overflow-y-auto">
+      <main className="flex-grow p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
         <div className="max-w-3xl mx-auto space-y-8">
 
           {/* Profile Section */}

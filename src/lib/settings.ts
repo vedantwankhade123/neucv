@@ -2,14 +2,12 @@
 
 export interface AutoSaveSettings {
     resumeAutoSave: boolean;
-    coverLetterAutoSave: boolean;
 }
 
 const SETTINGS_KEY = 'autoSaveSettings';
 
 const defaultSettings: AutoSaveSettings = {
     resumeAutoSave: true, // Enabled by default
-    coverLetterAutoSave: true, // Enabled by default
 };
 
 export const getAutoSaveSettings = (): AutoSaveSettings => {
@@ -37,11 +35,5 @@ export const saveAutoSaveSettings = (settings: AutoSaveSettings): void => {
 export const updateResumeAutoSave = (enabled: boolean): void => {
     const settings = getAutoSaveSettings();
     settings.resumeAutoSave = enabled;
-    saveAutoSaveSettings(settings);
-};
-
-export const updateCoverLetterAutoSave = (enabled: boolean): void => {
-    const settings = getAutoSaveSettings();
-    settings.coverLetterAutoSave = enabled;
     saveAutoSaveSettings(settings);
 };

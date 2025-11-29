@@ -3,9 +3,11 @@ import mammoth from 'mammoth';
 import { ResumeData, Experience, Education, LayoutItem } from '@/types/resume';
 import { initialResumeStyle } from '@/data/initialData';
 
-// Configure PDF.js worker for Vite - use unpkg.com which works better with Vite
+// Configure PDF.js worker for Vite
+// Use local worker file from public folder to avoid CORS issues
 if (typeof window !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+    // Use the worker file from public folder (copied from node_modules)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 }
 
 interface ParsedData {
