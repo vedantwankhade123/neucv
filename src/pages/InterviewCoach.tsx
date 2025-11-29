@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Video, VideoOff, Mic, MicOff, Square, Volume2, Loader2, CheckCircle2, ArrowRight, User } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, Square, Volume2, Loader2, CheckCircle2, ArrowRight, User, Clock, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -375,81 +375,110 @@ const InterviewCoach = () => {
     const timeRemaining = Math.max(0, timeLimit - elapsedTime);
 
     return (
-        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
-            {/* Header */}
-            <header className="bg-white border-b px-6 py-3 flex-shrink-0 shadow-sm z-10">
+        <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans">
+            {/* Immersive Header */}
+            <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex-shrink-0 shadow-sm z-20">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="p-2 bg-primary/10 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
                             <Video className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                            <h1 className="text-lg font-bold text-slate-900 leading-tight">Mock Interview</h1>
-                            <p className="text-xs text-muted-foreground font-medium">{interviewData!.setupData.jobRole}</p>
+                            <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-none">Mock Interview</h1>
+                            <p className="text-xs text-muted-foreground font-medium mt-1">{interviewData!.setupData.jobRole}</p>
                         </div>
                     </div>
                     
                     <div className="flex items-center gap-6">
                         <div className="flex flex-col items-end">
-                            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Time Remaining</span>
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">Time Remaining</span>
                             <div className={cn(
-                                "font-mono font-bold text-lg leading-none",
-                                timeRemaining < 300 ? "text-red-600 animate-pulse" : "text-slate-700"
+                                "flex items-center gap-1.5 font-mono font-bold text-lg leading-none",
+                                timeRemaining < 300 ? "text-red-500 animate-pulse" : "text-slate-700 dark:text-slate-200"
                             )}>
+                                <Clock className="h-4 w-4" />
                                 {formatDuration(timeRemaining)}
                             </div>
                         </div>
-                        <div className="h-8 w-px bg-slate-200"></div>
-                        <Button variant="destructive" size="sm" onClick={handleEndInterviewEarly}>
-                            <Square className="mr-2 h-3 w-3 fill-current" /> End Interview
+                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+                        <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            onClick={handleEndInterviewEarly}
+                            className="shadow-sm hover:shadow-md transition-all"
+                        >
+                            <Square className="mr-2 h-3 w-3 fill-current" /> End Session
                         </Button>
                     </div>
                 </div>
             </header>
 
-            {/* Main Content */}
-            <main className="flex-grow p-6 overflow-y-auto">
-                <div className="max-w-7xl mx-auto h-full flex flex-col">
-                    <div className="mb-6 flex items-center justify-between bg-white p-3 rounded-xl border shadow-sm">
-                        <span className="text-sm font-semibold text-slate-700">Question {currentQuestionIndex + 1} of {interviewData!.questions.length}</span>
-                        <div className="flex-1 mx-6 h-2 bg-slate-100 rounded-full overflow-hidden">
+            {/* Main Workspace */}
+            <main className="flex-grow p-4 md:p-6 overflow-y-auto bg-slate-50/50 dark:bg-slate-950">
+                <div className="max-w-7xl mx-auto h-full flex flex-col gap-6">
+                    {/* Progress Bar */}
+                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+                        <div className="flex flex-col">
+                            <span className="text-sm font-bold text-slate-900 dark:text-white">Question {currentQuestionIndex + 1}</span>
+                            <span className="text-xs text-muted-foreground">of {interviewData!.questions.length}</span>
+                        </div>
+                        <div className="flex-1 h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                             <div 
-                                className="h-full bg-primary transition-all duration-500 ease-out rounded-full" 
+                                className="h-full bg-primary transition-all duration-700 ease-out rounded-full shadow-[0_0_10px_rgba(37,99,235,0.3)]" 
                                 style={{ width: `${progress}%` }} 
                             />
                         </div>
-                        <span className="text-sm text-muted-foreground font-medium">{Math.round(progress)}% Complete</span>
+                        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{Math.round(progress)}%</span>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow min-h-0">
-                        {/* Question Panel */}
-                        <div className="flex flex-col gap-4 h-full">
-                            <Card className="p-6 bg-white border-l-4 border-l-primary shadow-md">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100">{currentQuestion.category}</Badge>
-                                    <Badge variant="outline" className="text-muted-foreground border-slate-300">{currentQuestion.difficulty}</Badge>
+                        {/* Left Column: Question & Answer */}
+                        <div className="flex flex-col gap-4 h-full min-h-[400px]">
+                            {/* Question Card */}
+                            <Card className="p-6 md:p-8 bg-white dark:bg-slate-900 border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex flex-wrap items-center gap-2 mb-4">
+                                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 hover:bg-blue-100 border-blue-100">
+                                        {currentQuestion.category}
+                                    </Badge>
+                                    <Badge variant="outline" className={cn(
+                                        "border-slate-200 dark:border-slate-700",
+                                        currentQuestion.difficulty === 'hard' ? "text-red-500 bg-red-50 dark:bg-red-900/10" :
+                                        currentQuestion.difficulty === 'medium' ? "text-yellow-600 bg-yellow-50 dark:bg-yellow-900/10" :
+                                        "text-green-600 bg-green-50 dark:bg-green-900/10"
+                                    )}>
+                                        {currentQuestion.difficulty}
+                                    </Badge>
                                 </div>
-                                <h2 className="text-xl md:text-2xl font-bold text-slate-800 leading-snug">
+                                <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white leading-relaxed tracking-tight">
                                     {currentQuestion.question}
                                 </h2>
                             </Card>
 
-                            <Card className="flex-grow flex flex-col p-4 shadow-md bg-white border-slate-200 relative overflow-hidden">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="font-semibold text-sm text-slate-500 uppercase tracking-wider">Your Answer</h3>
+                            {/* Answer Area */}
+                            <Card className="flex-grow flex flex-col shadow-sm border-slate-200 dark:border-slate-800 relative overflow-hidden bg-white dark:bg-slate-900">
+                                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-slate-400 animate-pulse"></div>
+                                        <h3 className="font-semibold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Your Response</h3>
+                                    </div>
                                     <Button
-                                        variant={isListening ? "destructive" : "secondary"}
+                                        variant={isListening ? "destructive" : "default"}
                                         size="sm"
                                         onClick={toggleListening}
-                                        className={cn("transition-all duration-300 gap-2", isListening && "animate-pulse")}
+                                        className={cn(
+                                            "transition-all duration-300 shadow-sm", 
+                                            isListening ? "animate-pulse" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
+                                        )}
                                     >
                                         {isListening ? (
                                             <>
-                                                <MicOff className="h-4 w-4" /> Stop Listening
+                                                <MicOff className="h-3.5 w-3.5 mr-2" /> Stop Recording
                                             </>
                                         ) : (
                                             <>
-                                                <Mic className="h-4 w-4" /> Start Speaking
+                                                <Mic className="h-3.5 w-3.5 mr-2" /> Start Recording
                                             </>
                                         )}
                                     </Button>
@@ -459,32 +488,36 @@ const InterviewCoach = () => {
                                     <Textarea
                                         value={currentAnswer}
                                         onChange={(e) => setCurrentAnswer(e.target.value)}
-                                        placeholder="Type your answer here or click 'Start Speaking'..."
-                                        className="h-full resize-none border-slate-200 focus-visible:ring-primary/20 text-base p-4"
+                                        placeholder="Type your answer here or click 'Start Recording' to speak..."
+                                        className="h-full resize-none border-0 focus-visible:ring-0 text-base p-6 leading-relaxed bg-transparent"
                                         disabled={isSubmittingAnswer}
                                     />
                                     {isListening && (
-                                        <div className="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-600 rounded-full text-xs font-bold animate-pulse pointer-events-none">
-                                            <div className="w-2 h-2 bg-red-600 rounded-full"></div>
-                                            Listening...
+                                        <div className="absolute bottom-6 right-6 flex items-center gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold border border-red-100 dark:border-red-900/30 animate-in fade-in slide-in-from-bottom-2">
+                                            <span className="relative flex h-2.5 w-2.5">
+                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                                            </span>
+                                            Recording...
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                                    <span className="text-xs text-muted-foreground font-medium">
+                                <div className="p-4 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                    <div className="text-xs text-muted-foreground font-medium flex items-center gap-2">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div>
                                         {currentAnswer.length} characters
-                                    </span>
+                                    </div>
                                     <Button
                                         onClick={handleSubmitAnswer}
                                         disabled={!currentAnswer.trim() || isSubmittingAnswer}
-                                        className="w-32 shadow-lg shadow-primary/20"
+                                        className="px-6 shadow-md hover:shadow-lg transition-all"
                                     >
                                         {isSubmittingAnswer ? (
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                         ) : (
                                             <>
-                                                Submit <ArrowRight className="ml-2 h-4 w-4" />
+                                                Submit Answer <ChevronRight className="ml-2 h-4 w-4" />
                                             </>
                                         )}
                                     </Button>
@@ -492,9 +525,9 @@ const InterviewCoach = () => {
                             </Card>
                         </div>
 
-                        {/* Video Panel */}
-                        <div className="flex flex-col h-full">
-                            <Card className="flex-grow bg-slate-900 rounded-2xl overflow-hidden shadow-xl border-slate-800 relative group">
+                        {/* Right Column: Video Preview & Tips */}
+                        <div className="flex flex-col h-full gap-4">
+                            <Card className="flex-grow bg-slate-950 rounded-2xl overflow-hidden shadow-xl border-slate-800 relative group min-h-[300px]">
                                 <video
                                     ref={videoRef}
                                     autoPlay
@@ -506,55 +539,59 @@ const InterviewCoach = () => {
                                     )}
                                 />
                                 {!isVideoOn && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-                                        <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center mb-4 border-4 border-slate-700 shadow-2xl">
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/50 backdrop-blur-md">
+                                        <div className="w-24 h-24 rounded-full bg-slate-800/80 flex items-center justify-center mb-4 border-4 border-slate-700/50 shadow-2xl">
                                             <User className="h-10 w-10 text-slate-400" />
                                         </div>
-                                        <p className="text-slate-400 font-medium">Camera is off</p>
+                                        <p className="text-slate-400 font-medium tracking-wide">Camera Disabled</p>
                                     </div>
                                 )}
 
-                                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                    <div className="flex items-center justify-center gap-4">
-                                        <Button
-                                            onClick={toggleVideo}
-                                            size="icon"
-                                            className={cn(
-                                                "w-12 h-12 rounded-full border-2 transition-transform hover:scale-110",
-                                                isVideoOn 
-                                                    ? "bg-white/10 hover:bg-white/20 border-white/20 text-white" 
-                                                    : "bg-red-500 hover:bg-red-600 border-red-500 text-white"
-                                            )}
-                                            title={isVideoOn ? "Turn Camera Off" : "Turn Camera On"}
-                                        >
-                                            {isVideoOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-                                        </Button>
+                                {/* Camera Controls Overlay */}
+                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center justify-center gap-4 z-20">
+                                    <Button
+                                        onClick={toggleVideo}
+                                        size="icon"
+                                        className={cn(
+                                            "w-12 h-12 rounded-full border-2 transition-all hover:scale-110 shadow-lg",
+                                            isVideoOn 
+                                                ? "bg-white/10 hover:bg-white/20 border-white/20 text-white backdrop-blur-md" 
+                                                : "bg-red-500 hover:bg-red-600 border-red-500 text-white"
+                                        )}
+                                        title={isVideoOn ? "Turn Camera Off" : "Turn Camera On"}
+                                    >
+                                        {isVideoOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+                                    </Button>
 
-                                        <Button
-                                            onClick={toggleAudio}
-                                            size="icon"
-                                            className={cn(
-                                                "w-12 h-12 rounded-full border-2 transition-transform hover:scale-110",
-                                                isAudioOn 
-                                                    ? "bg-white/10 hover:bg-white/20 border-white/20 text-white" 
-                                                    : "bg-red-500 hover:bg-red-600 border-red-500 text-white"
-                                            )}
-                                            title={isAudioOn ? "Mute Microphone" : "Unmute Microphone"}
-                                        >
-                                            {isAudioOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
-                                        </Button>
-                                    </div>
+                                    <Button
+                                        onClick={toggleAudio}
+                                        size="icon"
+                                        className={cn(
+                                            "w-12 h-12 rounded-full border-2 transition-all hover:scale-110 shadow-lg",
+                                            isAudioOn 
+                                                ? "bg-white/10 hover:bg-white/20 border-white/20 text-white backdrop-blur-md" 
+                                                : "bg-red-500 hover:bg-red-600 border-red-500 text-white"
+                                        )}
+                                        title={isAudioOn ? "Mute Microphone" : "Unmute Microphone"}
+                                    >
+                                        {isAudioOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                                    </Button>
                                 </div>
                             </Card>
                             
-                            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-800 flex gap-3 items-start">
-                                <div className="bg-blue-200 p-1.5 rounded-full mt-0.5">
-                                    <Volume2 className="h-3.5 w-3.5 text-blue-700" />
+                            <Card className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900/30 shadow-sm">
+                                <div className="flex gap-3">
+                                    <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-lg h-fit">
+                                        <Volume2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-sm text-blue-900 dark:text-blue-300 mb-1">Coach's Tip</h4>
+                                        <p className="text-sm text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
+                                            Structure your answer using the <strong>STAR method</strong> (Situation, Task, Action, Result) for behavioral questions. Be specific about your contributions.
+                                        </p>
+                                    </div>
                                 </div>
-                                <p className="leading-relaxed">
-                                    <strong>Pro Tip:</strong> Speak clearly and structure your answer using the STAR method (Situation, Task, Action, Result) for behavioral questions.
-                                </p>
-                            </div>
+                            </Card>
                         </div>
                     </div>
                 </div>
@@ -562,9 +599,9 @@ const InterviewCoach = () => {
 
             {/* Analysis Overlay */}
             {isGeneratingReport && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 animate-in fade-in duration-300">
-                    <Card className="p-10 text-center max-w-md shadow-2xl border-none bg-white/95">
-                        <div className="relative mb-6 mx-auto w-24 h-24">
+                <div className="fixed inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-500">
+                    <Card className="p-10 text-center max-w-md shadow-2xl border-none bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800">
+                        <div className="relative mb-8 mx-auto w-24 h-24">
                             <div className="absolute inset-0 rounded-full border-t-4 border-primary animate-spin"></div>
                             <div className="absolute inset-2 rounded-full border-r-4 border-purple-500 animate-spin animation-delay-150"></div>
                             <div className="absolute inset-4 rounded-full border-b-4 border-blue-500 animate-spin animation-delay-300"></div>
@@ -572,18 +609,22 @@ const InterviewCoach = () => {
                                 <CheckCircle2 className="h-8 w-8 text-green-500 animate-pulse" />
                             </div>
                         </div>
-                        <h2 className="text-2xl font-bold mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Analyzing Performance</h2>
-                        <p className="text-muted-foreground leading-relaxed mb-4">
-                            Our AI is evaluating your responses and preparing detailed feedback...
+                        <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">Generating Report</h2>
+                        <p className="text-muted-foreground leading-relaxed mb-6 text-lg">
+                            Analyzing your performance, checking technical accuracy, and preparing detailed feedback...
                         </p>
-                        {analysisProgress > 0 && (
-                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                <span>Progress</span>
+                                <span>{analysisProgress}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
                                 <div 
-                                    className="h-full bg-primary transition-all duration-300"
+                                    className="h-full bg-gradient-to-r from-primary to-purple-600 transition-all duration-300 rounded-full"
                                     style={{ width: `${analysisProgress}%` }}
                                 ></div>
                             </div>
-                        )}
+                        </div>
                     </Card>
                 </div>
             )}
