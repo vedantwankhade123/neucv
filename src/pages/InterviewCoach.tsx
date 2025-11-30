@@ -43,6 +43,7 @@ const InterviewCoach = () => {
     // Refs
     const timerIntervalRef = useRef<number | null>(null);
     const recognitionRef = useRef<any>(null);
+    const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -130,20 +131,13 @@ const InterviewCoach = () => {
             volume = sum / 128;
 
             // --- Silence Detection Logic ---
-            // Threshold is rough, usually noise is < 5-10
             const silenceThreshold = 15; 
             
             if (volume > silenceThreshold) {
-                // User is speaking, reset timer
                 lastAudioTimeRef.current = Date.now();
             } else {
-                // Silence detected
                 const timeSinceLastAudio = Date.now() - lastAudioTimeRef.current;
-                
-                // Only stop if silence exceeds configured duration AND we have captured some answer
                 if (timeSinceLastAudio > silenceDurationRef.current) {
-                    console.log(`Silence detected for ${timeSinceLastAudio}ms. Stopping mic.`);
-                    // Use setTimeout to break the animation loop context safely
                     setTimeout(() => {
                         stopListeningRef.current?.();
                         toast("Microphone paused", { description: "Silence detected." });
@@ -156,7 +150,6 @@ const InterviewCoach = () => {
             mode = 'ai';
             const t = Date.now() / 1000;
             
-            // Complex envelope to mimic speech syllables (bursty)
             const rhythm = Math.sin(t * 12); 
             const variation = Math.cos(t * 5.5); 
             const noise = Math.random() * 0.2; 
@@ -182,133 +175,89 @@ const InterviewCoach = () => {
         ctx.save();
         ctx.translate(centerX, centerY);
 
-        if (mode === 'user') {
-            // --- User Visualizer: Circular Frequency Bars ---
-            const barCount = 64; 
-            const angleStep = (Math.PI * 2) / barCount;
-            const t = Date.now() / 1000;
+        // --- Unified Filament Ring Visualizer ---
+        
+        // Scale effect
+        const scale = 1 + (volume / 255) * 0.08;
+        ctx.scale(scale, scale);
+        
+        const time = Date.now() / 1000;
+        ctx.rotate(time * 0.05);
+
+        ctx.globalCompositeOperation = 'screen'; 
+
+        // Draw Filaments
+        const particles = 720;
+        const angleStep = (Math.PI * 2) / particles;
+
+        for (let i = 0; i < particles; i++) {
+            const angle = i * angleStep;
             
-            // Pulse the radius slightly with volume
-            const userRadius = baseRadius * 0.9 + (volume / 255) * 10;
-
-            for (let i = 0; i < barCount; i++) {
-                // Map bar index to frequency data (mirroring for symmetry)
-                // We use the first 64 bins of the 128 available
-                let freqIndex = i < barCount / 2 ? i : barCount - 1 - i;
-                // Scale index to fit data array length roughly
-                freqIndex = Math.floor(freqIndex * (128 / (barCount / 2)));
-                
-                const value = frequencyData[freqIndex] || 0;
-                
-                // Calculate bar height
-                const barHeight = 10 + (value / 255) * 100;
-                
-                const angle = i * angleStep - (Math.PI / 2); // Start from top
-                
-                const x = Math.cos(angle) * userRadius;
-                const y = Math.sin(angle) * userRadius;
-                const xEnd = Math.cos(angle) * (userRadius + barHeight);
-                const yEnd = Math.sin(angle) * (userRadius + barHeight);
-
-                // Dynamic coloring for user voice (Warm colors)
-                const hue = 280 + (value / 255) * 60; // 280 (Purple) -> 340 (Pink)
-                const lightness = 60 + (value / 255) * 20;
-                
-                ctx.strokeStyle = `hsl(${hue}, 100%, ${lightness}%)`;
-                ctx.lineWidth = 4;
-                ctx.lineCap = 'round';
-                
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(xEnd, yEnd);
-                ctx.stroke();
-            }
+            const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
+            const freqValue = frequencyData[freqIndex] || 0;
             
-            // Inner glow for user
-            ctx.beginPath();
-            ctx.arc(0, 0, userRadius - 5, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(180, 50, 255, ${0.1 + (volume / 255) * 0.2})`;
-            ctx.fill();
-
-        } else {
-            // --- AI & Idle Visualizer: Filament Ring ---
+            // Color Logic
+            let hue;
+            let saturation = 100;
+            let lightness = 50 + (freqValue / 255) * 40; 
+            let alpha = 0.2 + (freqValue / 255) * 0.8;
             
-            // Scale effect
-            const scale = 1 + (volume / 255) * 0.08;
-            ctx.scale(scale, scale);
-            
-            const time = Date.now() / 1000;
-            ctx.rotate(time * 0.05);
-
-            ctx.globalCompositeOperation = 'screen'; 
-
-            // Draw Filaments
-            const particles = 720;
-            const angleStep = (Math.PI * 2) / particles;
-
-            for (let i = 0; i < particles; i++) {
-                const angle = i * angleStep;
-                
-                const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
-                const freqValue = frequencyData[freqIndex] || 0;
-                
-                // Color Logic
-                const normAngle = (angle / (Math.PI * 2)); 
-                const shiftedAngle = (normAngle + 0.2) % 1.0; 
-                
-                let hue;
-                let saturation = 100;
-                
-                if (mode === 'ai') {
-                    // AI Theme: Cool Blue Gradient (Cyan -> Deep Blue)
-                    hue = 190 + (Math.sin(angle + time) * 30); 
-                } else {
-                    // Idle Theme: Subtle Gray-Blue
-                    hue = 210;
-                    saturation = 20;
-                }
-
-                const lightness = 50 + (freqValue / 255) * 40; 
-                const alpha = 0.2 + (freqValue / 255) * 0.8;
-
-                ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-                ctx.lineWidth = 1.5;
-
-                const rStart = baseRadius;
-                const rEnd = baseRadius + 15 + (freqValue / 255) * 80; 
-                const swirl = 0.15 + (freqValue / 255) * 0.15; 
-                
-                const x1 = Math.cos(angle) * rStart;
-                const y1 = Math.sin(angle) * rStart;
-                const x2 = Math.cos(angle + swirl) * rEnd;
-                const y2 = Math.sin(angle + swirl) * rEnd;
-
-                const cpX = Math.cos(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
-                const cpY = Math.sin(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
-
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.quadraticCurveTo(cpX, cpY, x2, y2);
-                ctx.stroke();
-            }
-
-            // Inner rim light
-            ctx.beginPath();
-            ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
-            ctx.lineWidth = 2;
-            const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
-            
-            if (mode === 'ai') {
-                 rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)'); // Cyan
-                 rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)'); // Blue
+            if (mode === 'user') {
+                // User Theme: Colorful / Rainbow
+                hue = (i * 0.5 + time * 60 + freqValue * 0.5) % 360; 
+                saturation = 90;
+                lightness = 60 + (freqValue / 255) * 30;
+            } else if (mode === 'ai') {
+                // AI Theme: Cool Blue Gradient (Cyan -> Deep Blue)
+                hue = 190 + (Math.sin(angle + time) * 30); 
             } else {
-                 rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)'); 
-                 rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
+                // Idle Theme: Subtle Gray-Blue
+                hue = 210;
+                saturation = 20;
+                alpha = 0.1 + (freqValue / 255) * 0.5; // Fainter idle state
             }
 
-            ctx.strokeStyle = rimGradient;
+            ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+            ctx.lineWidth = 1.5;
+
+            const rStart = baseRadius;
+            const rEnd = baseRadius + 15 + (freqValue / 255) * 80; 
+            const swirl = 0.15 + (freqValue / 255) * 0.15; 
+            
+            const x1 = Math.cos(angle) * rStart;
+            const y1 = Math.sin(angle) * rStart;
+            const x2 = Math.cos(angle + swirl) * rEnd;
+            const y2 = Math.sin(angle + swirl) * rEnd;
+
+            const cpX = Math.cos(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
+            const cpY = Math.sin(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.quadraticCurveTo(cpX, cpY, x2, y2);
             ctx.stroke();
         }
+
+        // Inner rim light
+        ctx.beginPath();
+        ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
+        
+        if (mode === 'user') {
+             rimGradient.addColorStop(0, 'rgba(255, 50, 150, 0.8)'); // Pink
+             rimGradient.addColorStop(0.5, 'rgba(255, 200, 50, 0.8)'); // Gold
+             rimGradient.addColorStop(1, 'rgba(50, 100, 255, 0.8)'); // Blue
+        } else if (mode === 'ai') {
+             rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)'); // Cyan
+             rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)'); // Blue
+        } else {
+             rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)'); 
+             rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
+        }
+
+        ctx.strokeStyle = rimGradient;
+        ctx.stroke();
 
         ctx.restore();
 
