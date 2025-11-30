@@ -219,22 +219,22 @@ const Landing = () => {
         {/* Interview Coach Section */}
         <section id="interview" ref={interviewRef} className="py-24 bg-slate-50 relative overflow-hidden">
           {/* Background Decorative Blobs */}
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-purple-100 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
-          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-100 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-gray-200 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-gray-200 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
               
               {/* Left Content */}
               <div className="lg:w-1/2 text-left space-y-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold tracking-wide uppercase">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black text-white text-xs font-semibold tracking-wide uppercase">
                   <Sparkles className="h-3.5 w-3.5" />
                   New Feature
                 </div>
                 
                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 leading-tight">
                   Master Your Interview <br/>
-                  <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Before It Happens</span>
+                  <span className="text-slate-500">Before It Happens</span>
                 </h2>
                 
                 <p className="text-lg text-slate-600 leading-relaxed max-w-lg">
@@ -243,7 +243,7 @@ const Landing = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-white rounded-lg shadow-sm text-purple-600">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-black">
                       <BrainCircuit className="h-5 w-5" />
                     </div>
                     <div>
@@ -253,7 +253,7 @@ const Landing = () => {
                   </div>
                   
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-white rounded-lg shadow-sm text-blue-600">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-black">
                       <Mic className="h-5 w-5" />
                     </div>
                     <div>
@@ -263,7 +263,7 @@ const Landing = () => {
                   </div>
 
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-white rounded-lg shadow-sm text-green-600">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-black">
                       <BarChart3 className="h-5 w-5" />
                     </div>
                     <div>
@@ -273,7 +273,7 @@ const Landing = () => {
                   </div>
 
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-white rounded-lg shadow-sm text-amber-600">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-black">
                       <Globe className="h-5 w-5" />
                     </div>
                     <div>
@@ -284,7 +284,7 @@ const Landing = () => {
                 </div>
 
                 <div className="pt-4">
-                  <Button size="lg" className="bg-slate-900 text-white hover:bg-slate-800 shadow-lg group" asChild>
+                  <Button size="lg" className="bg-black text-white hover:bg-slate-800 shadow-lg group" asChild>
                     <Link to="/dashboard/interview">
                       Try Interview Coach <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                     </Link>
