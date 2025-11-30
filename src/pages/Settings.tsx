@@ -14,11 +14,18 @@ import {
 import { deleteAllResumes, getResumes } from '@/lib/resume-storage';
 import { showError, showSuccess } from '@/utils/toast';
 import { UserNav } from '@/components/UserNav';
-import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, FastForward } from 'lucide-react';
+import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, Globe } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AutoSaveToggle } from '../components/AutoSaveToggle';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 import { auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -32,21 +39,19 @@ const Settings = () => {
   
   // Settings state
   const [interviewSettings, setInterviewSettings] = useState({
-    interviewAutoSubmit: true,
-    interviewAutoNext: true,
-    interviewTTS: true
+    interviewTTS: true,
+    defaultLanguage: 'english'
   });
 
   useEffect(() => {
     const settings = getAutoSaveSettings();
     setInterviewSettings({
-        interviewAutoSubmit: settings.interviewAutoSubmit,
-        interviewAutoNext: settings.interviewAutoNext,
-        interviewTTS: settings.interviewTTS
+        interviewTTS: settings.interviewTTS,
+        defaultLanguage: settings.defaultLanguage || 'english'
     });
   }, []);
 
-  const handleInterviewSettingChange = (key: string, value: boolean) => {
+  const handleInterviewSettingChange = (key: string, value: any) => {
     setInterviewSettings(prev => ({ ...prev, [key]: value }));
     updateInterviewSettings({ [key]: value });
   };
@@ -197,56 +202,14 @@ const Settings = () => {
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-primary/10 rounded-md">
-                            <Mic className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label htmlFor="interview-auto-submit" className="text-base font-medium cursor-pointer">
-                                Auto-Submit on Silence
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                                Automatically submit your answer when you stop speaking (2.5s pause)
-                            </p>
-                        </div>
-                    </div>
-                    <Switch
-                        id="interview-auto-submit"
-                        checked={interviewSettings.interviewAutoSubmit}
-                        onCheckedChange={(checked) => handleInterviewSettingChange('interviewAutoSubmit', checked)}
-                    />
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                            <FastForward className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label htmlFor="interview-auto-next" className="text-base font-medium cursor-pointer">
-                                Auto-Next Question
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                                Automatically move to the next question after submitting an answer
-                            </p>
-                        </div>
-                    </div>
-                    <Switch
-                        id="interview-auto-next"
-                        checked={interviewSettings.interviewAutoNext}
-                        onCheckedChange={(checked) => handleInterviewSettingChange('interviewAutoNext', checked)}
-                    />
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
                             <Volume2 className="h-5 w-5 text-primary" />
                         </div>
                         <div className="space-y-0.5">
                             <Label htmlFor="interview-tts" className="text-base font-medium cursor-pointer">
-                                Read Questions Aloud
+                                AI Voice (Text-to-Speech)
                             </Label>
                             <p className="text-sm text-muted-foreground">
-                                Use Text-to-Speech to read interview questions to you
+                                Read interview questions aloud
                             </p>
                         </div>
                     </div>
@@ -255,6 +218,36 @@ const Settings = () => {
                         checked={interviewSettings.interviewTTS}
                         onCheckedChange={(checked) => handleInterviewSettingChange('interviewTTS', checked)}
                     />
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-md">
+                            <Globe className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <Label htmlFor="default-language" className="text-base font-medium">
+                                Default Interview Language
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                                Set your preferred language for new interview sessions
+                            </p>
+                        </div>
+                    </div>
+                    <Select 
+                        value={interviewSettings.defaultLanguage} 
+                        onValueChange={(value) => handleInterviewSettingChange('defaultLanguage', value)}
+                    >
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select Language" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="english">English</SelectItem>
+                            <SelectItem value="hinglish">Hinglish</SelectItem>
+                            <SelectItem value="hindi">Hindi</SelectItem>
+                            <SelectItem value="marathi">Marathi</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
               </CardContent>
             </Card>

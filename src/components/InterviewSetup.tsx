@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { InterviewSetupData, InterviewLanguage, InterviewDuration, InterviewQuestionCount } from '@/types/interview';
 import { parseResumePDF, parseResumeImage, validateResumeFile, getLanguageDisplayName } from '@/lib/interview-service';
 import { useToast } from '@/hooks/use-toast';
+import { getAutoSaveSettings } from '@/lib/settings';
 
 interface InterviewSetupProps {
     onComplete: (setupData: InterviewSetupData) => void;
@@ -25,6 +26,13 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
     const [numQuestions, setNumQuestions] = useState<InterviewQuestionCount>(10);
     const [language, setLanguage] = useState<InterviewLanguage>('english');
     const [isProcessing, setIsProcessing] = useState(false);
+
+    useEffect(() => {
+        const settings = getAutoSaveSettings();
+        if (settings.defaultLanguage) {
+            setLanguage(settings.defaultLanguage as InterviewLanguage);
+        }
+    }, []);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

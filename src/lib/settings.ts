@@ -2,26 +2,24 @@
 
 export interface AutoSaveSettings {
     resumeAutoSave: boolean;
-    interviewAutoSubmit: boolean; // Submit answer automatically on silence
-    interviewAutoNext: boolean;   // Move to next question automatically after submit
     interviewTTS: boolean;        // Read questions aloud (Text-to-Speech)
+    defaultLanguage: string;      // Default interview language
 }
 
-const SETTINGS_KEY = 'appSettings'; // Renamed from autoSaveSettings for broader scope
+const SETTINGS_KEY = 'appSettings'; 
 
 const defaultSettings: AutoSaveSettings = {
     resumeAutoSave: true,
-    interviewAutoSubmit: true,
-    interviewAutoNext: true,
     interviewTTS: true,
+    defaultLanguage: 'english',
 };
 
 export const getAutoSaveSettings = (): AutoSaveSettings => {
     try {
-        // Try new key first
         const stored = localStorage.getItem(SETTINGS_KEY);
         if (stored) {
             const parsed = JSON.parse(stored);
+            // Ensure new defaults are merged if missing
             return { ...defaultSettings, ...parsed };
         }
         
