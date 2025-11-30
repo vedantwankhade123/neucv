@@ -4,17 +4,17 @@ import { db } from './firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { createWorker } from 'tesseract.js';
 
-// Configure PDF.js worker using a reliable CDN
+// Configure PDF.js worker using a reliable CDN with correct version matching package.json
 if (typeof window !== 'undefined') {
-    // Use specific version matching package.json to avoid version mismatch errors
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
+    // pdfjs-dist@5.4.394
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.4.394/build/pdf.worker.min.mjs';
 }
 
 /**
  * Render a PDF page to an image URL for OCR
  */
 async function pdfPageToImage(page: any): Promise<string> {
-    const viewport = page.getViewport({ scale: 1.5 }); // Reasonable scale for OCR
+    const viewport = page.getViewport({ scale: 2.0 }); // Increased scale for better OCR accuracy
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     canvas.height = viewport.height;
@@ -34,35 +34,50 @@ export async function parseResumePDF(file: File): Promise<string> {
     try {
         console.log('Starting PDF extraction for file:', file.name);
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        // Load the PDF document
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        
+        console.log('PDF loaded, pages:', pdf.numPages);
         
         let fullText = '';
         let isScanned = true;
 
-        // Try standard text extraction first
-        for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) { // Limit to first 3 pages
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            
-            // Check if page has actual text items
-            if (textContent.items.length > 0) {
-                isScanned = false;
-            }
+        // Extract text from pages (limit to first 5 pages to avoid timeouts on huge docs)
+        const maxPages = Math.min(pdf.numPages, 5);
+        
+        for (let i = 1; i <= maxPages; i++) {
+            try {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                // Check if page has actual text items
+                if (textContent.items.length > 0) {
+                    // Check for substantial text content
+                    const itemText = textContent.items.map((item: any) => item.str).join('');
+                    if (itemText.trim().length > 50) {
+                        isScanned = false;
+                    }
+                }
 
-            const pageText = textContent.items
-                .map((item: any) => item.str)
-                .join(' ');
-            
-            if (pageText.trim().length > 0) {
-                fullText += pageText + '\n';
+                const pageText = textContent.items
+                    .map((item: any) => item.str)
+                    .join(' ');
+                
+                if (pageText.trim().length > 0) {
+                    fullText += pageText + '\n';
+                }
+            } catch (pageError) {
+                console.error(`Error parsing page ${i}:`, pageError);
             }
         }
 
         // If text is very short or empty, it might be a scanned PDF or image-only PDF
-        if (isScanned || fullText.trim().length < 50) {
+        if (isScanned || fullText.trim().length < 100) {
             console.log('PDF appears to be scanned or image-based. Attempting OCR...');
             
-            // Process first page only for efficiency
+            // Process first page for OCR
             const page = await pdf.getPage(1);
             const imageUrl = await pdfPageToImage(page);
             
@@ -71,14 +86,23 @@ export async function parseResumePDF(file: File): Promise<string> {
             await worker.terminate();
             
             console.log('OCR Fallback complete, text length:', ret.data.text.length);
-            fullText = ret.data.text;
+            // Append OCR text if standard extraction failed
+            if (ret.data.text.length > fullText.length) {
+                fullText = ret.data.text;
+            }
         }
 
-        console.log('Total text extracted:', fullText.length);
-        return fullText.trim();
-    } catch (error) {
+        const cleanedText = fullText.trim();
+        console.log('Total text extracted:', cleanedText.length);
+        
+        if (cleanedText.length === 0) {
+            throw new Error("No text could be extracted from this PDF.");
+        }
+
+        return cleanedText;
+    } catch (error: any) {
         console.error('PDF parsing error details:', error);
-        throw new Error('Failed to parse resume PDF. Please try uploading an image format instead.');
+        throw new Error(`Failed to parse resume PDF: ${error.message}`);
     }
 }
 

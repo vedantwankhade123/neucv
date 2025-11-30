@@ -320,7 +320,7 @@ export const generateInterviewQuestions = async (
   const prompt = `You are an expert Senior Technical Recruiter and Hiring Manager. Prepare a rigorous interview question set for a candidate applying for: ${jobRole}.
   
   Candidate Resume Context:
-  ${resumeText.substring(0, 2000)}
+  ${resumeText.substring(0, 10000)}
   
   Requirements:
   - Generate exactly ${numQuestions} questions.
@@ -391,7 +391,7 @@ export const generateInterviewReport = async (
   const prompt = `You are a Senior Interview Coach. Generate a comprehensive performance report for a mock interview for the role of ${setupData.jobRole}.
   
   Interview Transcript Summary:
-  ${questions.map((q: any, i: number) => `Q: ${q.question}\nA: ${responses[i]?.answer || 'No answer'}`).join('\n').substring(0, 4000)}
+  ${questions.map((q: any, i: number) => `Q: ${q.question}\nA: ${responses[i]?.answer || 'No answer'}`).join('\n').substring(0, 10000)}
   
   Return ONLY a JSON object:
   {

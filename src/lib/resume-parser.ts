@@ -4,10 +4,9 @@ import { ResumeData, Experience, Education, LayoutItem } from '@/types/resume';
 import { initialResumeStyle } from '@/data/initialData';
 
 // Configure PDF.js worker for Vite
-// Use local worker file from public folder to avoid CORS issues
 if (typeof window !== 'undefined') {
-    // Use the worker file from public folder (copied from node_modules)
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+    // Use consistent version from CDN (v5.4.394)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@5.4.394/build/pdf.worker.min.mjs';
 }
 
 interface ParsedData {
@@ -34,7 +33,8 @@ export async function extractTextFromPDF(file: File): Promise<string> {
         const arrayBuffer = await file.arrayBuffer();
         console.log('ArrayBuffer created, size:', arrayBuffer.byteLength);
 
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
         console.log('PDF loaded successfully, pages:', pdf.numPages);
 
         let fullText = '';
