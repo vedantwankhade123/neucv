@@ -139,9 +139,16 @@ const Landing = () => {
             <p className="text-md sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
               Our intuitive builder, professional templates, and real-time editor make it easy to create a polished, print-ready resume that gets you noticed.
             </p>
-            <Button size="lg" asChild>
-              <Link to="/dashboard">Create Your Resume Now</Link>
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <Button size="lg" asChild className="w-full sm:w-auto">
+                <Link to="/dashboard">Create Your Resume Now</Link>
+              </Button>
+              <Button size="lg" variant="outline" asChild className="w-full sm:w-auto gap-2">
+                <Link to="/dashboard/interview">
+                  <MessageCircle className="h-4 w-4" /> Try Interview Coach
+                </Link>
+              </Button>
+            </div>
           </div>
 
           {/* Responsive Resume Preview */}
