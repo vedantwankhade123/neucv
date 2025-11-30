@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import ThreeDMarqueeDemo from '@/components/3d-marquee-demo';
-import { LayoutTemplate, Palette, FileText, Download, Github, Mail, Linkedin, Globe, Users, Star, MessageCircle, Mic, BrainCircuit, BarChart3, Sparkles, ArrowRight } from 'lucide-react';
+import { LayoutTemplate, Palette, FileText, Download, Github, Mail, Linkedin, Globe, Users, Star, MessageCircle, Mic, BrainCircuit, BarChart3, Sparkles, ArrowRight, Bot, Volume2, Maximize2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/Logo';
@@ -292,68 +292,148 @@ const Landing = () => {
                 </div>
               </div>
 
-              {/* Right Visual */}
+              {/* Right Visual - Realistic Animated Mockup */}
               <div className="lg:w-1/2 relative">
-                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-slate-200 bg-white">
-                  {/* Mock UI for Interview Coach */}
-                  <div className="bg-slate-50 border-b p-3 flex items-center gap-2">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-slate-200 bg-white transform transition-transform hover:scale-[1.01] duration-500">
+                  {/* Fake Browser Header */}
+                  <div className="bg-slate-50 border-b p-3 flex items-center justify-between">
                     <div className="flex gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-red-400"></div>
                       <div className="w-3 h-3 rounded-full bg-amber-400"></div>
                       <div className="w-3 h-3 rounded-full bg-green-400"></div>
                     </div>
-                    <div className="ml-4 bg-white px-3 py-1 rounded-md text-xs text-slate-400 font-medium w-full max-w-[200px]">neucv.com/interview</div>
+                    <div className="bg-white px-3 py-1 rounded-md text-[10px] text-slate-400 font-medium border border-slate-200 shadow-sm flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        neucv.com/interview-coach
+                    </div>
+                    <div className="w-10"></div>
                   </div>
-                  
-                  <div className="p-6 md:p-8 bg-gradient-to-br from-slate-50 to-white">
-                    <div className="flex flex-col gap-6">
-                      {/* AI Question Bubble */}
-                      <div className="flex gap-4">
-                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                          <MessageCircle className="h-5 w-5 text-purple-600" />
+
+                  {/* App Interface Replica */}
+                  <div className="bg-slate-50/50 p-4 h-[400px] flex flex-col gap-4">
+                    {/* App Header */}
+                    <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-primary/5 rounded-lg flex items-center justify-center border border-primary/10">
+                          <Bot className="h-5 w-5 text-primary" />
                         </div>
-                        <div className="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-slate-100 max-w-[90%]">
-                          <p className="text-sm font-medium text-slate-800">Can you describe a challenging project you worked on?</p>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">AI Coach</div>
+                          <div className="text-[10px] text-muted-foreground font-medium">Marketing Manager</div>
                         </div>
+                      </div>
+                      <div className="flex-1 mx-6 hidden sm:block">
+                        <div className="flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            <span>Question 1</span>
+                            <span>10 Total</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full w-[10%] bg-primary rounded-full"></div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 text-[10px] font-mono font-medium text-slate-600">29:39</div>
+                        <Button size="sm" variant="destructive" className="h-7 text-[10px] px-3 shadow-sm">Finish</Button>
+                      </div>
+                    </div>
+
+                    {/* Main Content Area */}
+                    <div className="flex gap-4 h-full min-h-0">
+                      {/* Visualizer (Left) */}
+                      <div className="w-1/2 bg-black rounded-2xl relative overflow-hidden flex items-center justify-center p-4 shadow-lg ring-1 ring-black/5">
+                        {/* Badge */}
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-950/40 backdrop-blur-md border border-cyan-500/20 text-cyan-400 text-[9px] font-bold tracking-widest px-3 py-1 rounded-full z-20 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+                            AI SPEAKING
+                        </div>
+                        
+                        {/* Background Gradient */}
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900/40 via-black to-black"></div>
+
+                        {/* CSS Visualizer */}
+                        <div className="relative w-40 h-40 flex items-center justify-center">
+                          {/* Animated Rings */}
+                          <div className="absolute inset-0 rounded-full border-[1px] border-cyan-500/20 animate-[spin_8s_linear_infinite]" style={{ borderRadius: '40% 60% 70% 30% / 40% 50% 60% 50%' }}></div>
+                          <div className="absolute inset-2 rounded-full border-[1px] border-blue-500/20 animate-[spin_6s_linear_infinite_reverse]" style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}></div>
+                          <div className="absolute inset-4 rounded-full border-[1px] border-indigo-500/20 animate-[spin_10s_linear_infinite]" style={{ borderRadius: '50% 50% 20% 80% / 25% 80% 20% 60%' }}></div>
+                          
+                          {/* Pulse Effect */}
+                          <div className="absolute inset-0 bg-cyan-500/5 rounded-full animate-pulse blur-xl"></div>
+
+                          {/* Filament Simulation (Static SVGs rotated with CSS) */}
+                          <div className="absolute inset-0 opacity-40 animate-[spin_20s_linear_infinite]">
+                             <svg viewBox="0 0 100 100" className="w-full h-full text-cyan-500/30 fill-current">
+                                <circle cx="50" cy="50" r="48" stroke="currentColor" strokeWidth="0.5" fill="none" strokeDasharray="1 3" />
+                             </svg>
+                          </div>
+
+                          {/* Core */}
+                          <div className="w-20 h-20 bg-black rounded-full z-10 flex items-center justify-center border border-white/10 relative shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+                            <Volume2 className="h-8 w-8 text-white/90 animate-pulse" />
+                          </div>
+                        </div>
+                        
+                        <div className="absolute bottom-8 text-slate-400 text-[10px] font-medium tracking-wide">Interviewer is speaking...</div>
                       </div>
 
-                      {/* User Waveform Visual */}
-                      <div className="flex gap-4 flex-row-reverse">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <Mic className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div className="bg-blue-600 p-4 rounded-2xl rounded-tr-none shadow-md text-white max-w-[90%] flex items-center gap-3">
-                          <div className="flex items-center gap-1 h-4">
-                            {[...Array(12)].map((_, i) => (
-                              <div 
-                                key={i} 
-                                className="w-1 bg-white/80 rounded-full animate-pulse"
-                                style={{ 
-                                  height: `${Math.random() * 100}%`,
-                                  animationDelay: `${i * 0.1}s` 
-                                }}
-                              ></div>
-                            ))}
+                      {/* Question/Input (Right) */}
+                      <div className="w-1/2 flex flex-col gap-3">
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex-1 flex flex-col relative overflow-hidden group">
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-[9px] font-bold text-slate-400 tracking-widest uppercase">Question 1 / 10</span>
+                            <div className="flex gap-1.5">
+                              <span className="text-[9px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">BEHAVIORAL</span>
+                              <span className="text-[9px] font-semibold bg-orange-50 border border-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Medium</span>
+                            </div>
                           </div>
-                          <span className="text-xs font-medium opacity-90">Recording answer...</span>
+                          <h3 className="text-sm md:text-base font-bold leading-relaxed text-slate-800 relative z-10">
+                            Richard, your resume mentions developing and executing comprehensive marketing strategies at Borcelle Studio...
+                          </h3>
+                          
+                          {/* Fade at bottom */}
+                          <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
+                          
+                          {/* Scrollbar Indicator */}
+                          <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-12 bg-slate-100 rounded-full">
+                             <div className="w-full h-4 bg-slate-300 rounded-full"></div>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Analysis Card */}
-                      <div className="mt-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300 fill-mode-backwards">
-                        <div className="flex items-center justify-between mb-3">
-                          <h5 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-amber-500" /> Live Feedback
-                          </h5>
-                          <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Strong Answer</span>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 w-[85%] rounded-full"></div>
+                        <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                          <div className="flex items-center justify-between mb-3 px-1">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <Mic className="h-3 w-3" /> Voice Input
+                            </span>
+                            <span className="text-[9px] font-medium text-slate-400 hover:text-primary cursor-pointer transition-colors">Switch to Text</span>
                           </div>
-                          <p className="text-xs text-slate-500">Great use of the STAR method. Your explanation of the outcome was very clear.</p>
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 flex items-center justify-between group cursor-pointer hover:border-slate-200 transition-colors">
+                            <span className="text-xs text-slate-400 font-medium pl-1 group-hover:text-slate-500">Listening... Speak clearly.</span>
+                            <div className="w-9 h-9 bg-slate-900 rounded-full flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                              <Mic className="h-4 w-4 text-white" />
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center mt-3 px-1">
+                             <span className="text-[9px] text-slate-300 font-medium">0 chars</span>
+                             <div className="flex gap-2">
+                                <span className="text-[10px] font-medium text-slate-400 px-2 py-1 hover:text-slate-600 cursor-pointer">Skip</span>
+                                <div className="text-[10px] font-bold text-white bg-slate-900 px-3 py-1 rounded-md shadow-sm flex items-center gap-1">
+                                   Submit <ArrowRight className="h-2.5 w-2.5" />
+                                </div>
+                             </div>
+                          </div>
                         </div>
                       </div>
+                    </div>
+                    
+                    {/* Pro Tip - Subtle */}
+                    <div className="bg-white border border-slate-100 rounded-xl p-3 flex gap-3 items-center shadow-sm">
+                       <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 text-blue-600">
+                          <Sparkles className="h-4 w-4" />
+                       </div>
+                       <div>
+                          <p className="text-[10px] font-bold text-slate-900 uppercase tracking-wide">Pro Tip</p>
+                          <p className="text-[10px] text-slate-500 leading-snug">Use the STAR method (Situation, Task, Action, Result) to structure your answers.</p>
+                       </div>
                     </div>
                   </div>
                 </div>
