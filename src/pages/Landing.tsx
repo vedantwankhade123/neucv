@@ -134,7 +134,7 @@ const Landing = () => {
         <section id="home" className="relative text-center px-4 pt-16 md:pt-20 pb-0 md:pb-12 md:min-h-screen md:flex md:flex-col md:justify-end md:items-center md:overflow-hidden">
           <div className="relative z-20 md:pb-[480px]">
             <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tighter mb-4 animate-shine bg-[linear-gradient(110deg,hsl(var(--foreground)),45%,hsl(var(--muted-foreground)),55%,hsl(var(--foreground)))] bg-[length:200%_auto] bg-clip-text text-transparent">
-              Craft a Standout Resume in Minutes
+              Build Resumes. Master Interviews.
             </h2>
             <p className="text-md sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
               Our intuitive builder, professional templates, and real-time editor make it easy to create a polished, print-ready resume that gets you noticed.
