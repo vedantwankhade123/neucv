@@ -1,11 +1,10 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import ThreeDMarqueeDemo from '@/components/3d-marquee-demo';
-import { LayoutTemplate, Palette, FileText, Download, Github, Mail, Linkedin, Globe, Users, Star, MessageCircle, Mic, BrainCircuit, BarChart3, Sparkles, ArrowRight, Bot, Volume2, Maximize2 } from 'lucide-react';
+import { LayoutTemplate, Palette, FileText, Download, Github, Mail, Linkedin, Globe, Users, Star, MessageCircle, Mic, BrainCircuit, BarChart3, Sparkles, ArrowRight, Bot, Volume2, Maximize2, Check, Zap, CreditCard, Loader2, ShieldCheck, Crown } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/Logo';
-import React from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { initialResumeStyle } from '@/data/initialData';
@@ -13,6 +12,20 @@ import { previewDataMap } from '@/data/previewData';
 import CorporateTemplate from '@/components/templates/CorporateTemplate';
 import { auth } from '@/lib/firebase';
 import { getGlobalStats } from '@/lib/stats-service';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { addCredits, updateUserPlan, addTemplateCredits } from '@/lib/user-service';
+import { useToast } from '@/hooks/use-toast';
+import { motion } from 'framer-motion';
+import { Heart, QrCode, Share2 } from 'lucide-react';
+
+
 
 const Landing = () => {
   const [user, setUser] = useState<any>(null);
@@ -21,17 +34,13 @@ const Landing = () => {
   const featuresRef = useRef<HTMLElement>(null);
   const interviewRef = useRef<HTMLElement>(null);
   const templatesRef = useRef<HTMLElement>(null);
+  const contributeRef = useRef<HTMLElement>(null);
   const connectRef = useRef<HTMLElement>(null);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
 
-  const [stats, setStats] = useState({ totalUsers: 0, totalResumes: 0, totalDownloads: 0 });
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      const data = await getGlobalStats();
-      setStats(data);
-    };
-    fetchStats();
-  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
@@ -52,10 +61,13 @@ const Landing = () => {
     const featuresTop = featuresRef.current?.offsetTop ?? Infinity;
     const interviewTop = interviewRef.current?.offsetTop ?? Infinity;
     const templatesTop = templatesRef.current?.offsetTop ?? Infinity;
+
     const connectTop = connectRef.current?.offsetTop ?? Infinity;
 
     if (scrollPosition >= connectTop) {
       setActiveLink('connect');
+    } else if (scrollPosition >= contributeRef.current?.offsetTop!) {
+      setActiveLink('contribute');
     } else if (scrollPosition >= templatesTop) {
       setActiveLink('templates');
     } else if (scrollPosition >= interviewTop) {
@@ -102,7 +114,7 @@ const Landing = () => {
                 <a href="#features" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'features' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Features</a>
                 <a href="#interview" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'interview' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Interview</a>
                 <a href="#templates" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'templates' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Templates</a>
-                <Link to="/pricing" className="font-medium transition-colors px-3 py-1.5 rounded-full text-foreground hover:text-foreground/80">Pricing</Link>
+                <a href="#contribute" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'contribute' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Contribute</a>
                 <a href="#connect" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'connect' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Connect</a>
               </div>
             </nav>
@@ -143,11 +155,10 @@ const Landing = () => {
               <Button size="lg" asChild className="w-full sm:w-auto">
                 <Link to="/dashboard">Create Your Resume Now</Link>
               </Button>
-              <Button size="lg" variant="outline" asChild className="w-full sm:w-auto gap-2">
-                <Link to="/dashboard/interview">
-                  <MessageCircle className="h-4 w-4" /> Try Interview Coach
-                </Link>
+              <Button size="lg" variant="outline" asChild className="w-full sm:w-auto">
+                <Link to="/dashboard/interview">Try Interview Coach</Link>
               </Button>
+
             </div>
           </div>
 
@@ -224,19 +235,19 @@ const Landing = () => {
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
-              
+
               {/* Left Content */}
               <div className="lg:w-1/2 text-left space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black text-white text-xs font-semibold tracking-wide uppercase">
                   <Sparkles className="h-3.5 w-3.5" />
                   New Feature
                 </div>
-                
+
                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 leading-tight">
-                  Master Your Interview <br/>
+                  Master Your Interview <br />
                   <span className="text-slate-500">Before It Happens</span>
                 </h2>
-                
+
                 <p className="text-lg text-slate-600 leading-relaxed max-w-lg">
                   Practice with our AI-powered Interview Coach. Get real-time feedback on your answers, tone, and confidence tailored specifically to your resume.
                 </p>
@@ -251,7 +262,7 @@ const Landing = () => {
                       <p className="text-sm text-slate-500">Tailored to your specific job role.</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-white rounded-lg shadow-sm text-black">
                       <Mic className="h-5 w-5" />
@@ -303,8 +314,8 @@ const Landing = () => {
                       <div className="w-3 h-3 rounded-full bg-green-400"></div>
                     </div>
                     <div className="bg-white px-3 py-1 rounded-md text-[10px] text-slate-400 font-medium border border-slate-200 shadow-sm flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                        neucv.com/interview-coach
+                      <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                      neucv.com/interview-coach
                     </div>
                     <div className="w-10"></div>
                   </div>
@@ -324,8 +335,8 @@ const Landing = () => {
                       </div>
                       <div className="flex-1 mx-6 hidden sm:block">
                         <div className="flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            <span>Question 1</span>
-                            <span>10 Total</span>
+                          <span>Question 1</span>
+                          <span>10 Total</span>
                         </div>
                         <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div className="h-full w-[10%] bg-primary rounded-full"></div>
@@ -343,9 +354,9 @@ const Landing = () => {
                       <div className="w-1/2 bg-black rounded-2xl relative overflow-hidden flex items-center justify-center p-4 shadow-lg ring-1 ring-black/5">
                         {/* Badge */}
                         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-950/40 backdrop-blur-md border border-cyan-500/20 text-cyan-400 text-[9px] font-bold tracking-widest px-3 py-1 rounded-full z-20 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-                            AI SPEAKING
+                          AI SPEAKING
                         </div>
-                        
+
                         {/* Background Gradient */}
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900/40 via-black to-black"></div>
 
@@ -355,15 +366,15 @@ const Landing = () => {
                           <div className="absolute inset-0 rounded-full border-[1px] border-cyan-500/20 animate-[spin_8s_linear_infinite]" style={{ borderRadius: '40% 60% 70% 30% / 40% 50% 60% 50%' }}></div>
                           <div className="absolute inset-2 rounded-full border-[1px] border-blue-500/20 animate-[spin_6s_linear_infinite_reverse]" style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}></div>
                           <div className="absolute inset-4 rounded-full border-[1px] border-indigo-500/20 animate-[spin_10s_linear_infinite]" style={{ borderRadius: '50% 50% 20% 80% / 25% 80% 20% 60%' }}></div>
-                          
+
                           {/* Pulse Effect */}
                           <div className="absolute inset-0 bg-cyan-500/5 rounded-full animate-pulse blur-xl"></div>
 
                           {/* Filament Simulation (Static SVGs rotated with CSS) */}
                           <div className="absolute inset-0 opacity-40 animate-[spin_20s_linear_infinite]">
-                             <svg viewBox="0 0 100 100" className="w-full h-full text-cyan-500/30 fill-current">
-                                <circle cx="50" cy="50" r="48" stroke="currentColor" strokeWidth="0.5" fill="none" strokeDasharray="1 3" />
-                             </svg>
+                            <svg viewBox="0 0 100 100" className="w-full h-full text-cyan-500/30 fill-current">
+                              <circle cx="50" cy="50" r="48" stroke="currentColor" strokeWidth="0.5" fill="none" strokeDasharray="1 3" />
+                            </svg>
                           </div>
 
                           {/* Core */}
@@ -371,7 +382,7 @@ const Landing = () => {
                             <Volume2 className="h-8 w-8 text-white/90 animate-pulse" />
                           </div>
                         </div>
-                        
+
                         <div className="absolute bottom-8 text-slate-400 text-[10px] font-medium tracking-wide">Interviewer is speaking...</div>
                       </div>
 
@@ -388,20 +399,20 @@ const Landing = () => {
                           <h3 className="text-sm md:text-base font-bold leading-relaxed text-slate-800 relative z-10">
                             Richard, your resume mentions developing and executing comprehensive marketing strategies at Borcelle Studio...
                           </h3>
-                          
+
                           {/* Fade at bottom */}
                           <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
-                          
+
                           {/* Scrollbar Indicator */}
                           <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-12 bg-slate-100 rounded-full">
-                             <div className="w-full h-4 bg-slate-300 rounded-full"></div>
+                            <div className="w-full h-4 bg-slate-300 rounded-full"></div>
                           </div>
                         </div>
 
                         <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
                           <div className="flex items-center justify-between mb-3 px-1">
                             <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                <Mic className="h-3 w-3" /> Voice Input
+                              <Mic className="h-3 w-3" /> Voice Input
                             </span>
                             <span className="text-[9px] font-medium text-slate-400 hover:text-primary cursor-pointer transition-colors">Switch to Text</span>
                           </div>
@@ -411,33 +422,33 @@ const Landing = () => {
                               <Mic className="h-4 w-4 text-white" />
                             </div>
                           </div>
-                          
+
                           <div className="flex justify-between items-center mt-3 px-1">
-                             <span className="text-[9px] text-slate-300 font-medium">0 chars</span>
-                             <div className="flex gap-2">
-                                <span className="text-[10px] font-medium text-slate-400 px-2 py-1 hover:text-slate-600 cursor-pointer">Skip</span>
-                                <div className="text-[10px] font-bold text-white bg-slate-900 px-3 py-1 rounded-md shadow-sm flex items-center gap-1">
-                                   Submit <ArrowRight className="h-2.5 w-2.5" />
-                                </div>
-                             </div>
+                            <span className="text-[9px] text-slate-300 font-medium">0 chars</span>
+                            <div className="flex gap-2">
+                              <span className="text-[10px] font-medium text-slate-400 px-2 py-1 hover:text-slate-600 cursor-pointer">Skip</span>
+                              <div className="text-[10px] font-bold text-white bg-slate-900 px-3 py-1 rounded-md shadow-sm flex items-center gap-1">
+                                Submit <ArrowRight className="h-2.5 w-2.5" />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Pro Tip - Subtle */}
                     <div className="bg-white border border-slate-100 rounded-xl p-3 flex gap-3 items-center shadow-sm">
-                       <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 text-blue-600">
-                          <Sparkles className="h-4 w-4" />
-                       </div>
-                       <div>
-                          <p className="text-[10px] font-bold text-slate-900 uppercase tracking-wide">Pro Tip</p>
-                          <p className="text-[10px] text-slate-500 leading-snug">Use the STAR method (Situation, Task, Action, Result) to structure your answers.</p>
-                       </div>
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 text-blue-600">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-900 uppercase tracking-wide">Pro Tip</p>
+                        <p className="text-[10px] text-slate-500 leading-snug">Use the STAR method (Situation, Task, Action, Result) to structure your answers.</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-                
+
               </div>
 
             </div>
@@ -455,6 +466,64 @@ const Landing = () => {
           <ThreeDMarqueeDemo />
         </section>
 
+        {/* Contribute Section */}
+        <section id="contribute" ref={contributeRef} className="py-20 bg-slate-50">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold">Support Development</h2>
+              <p className="text-lg text-muted-foreground mt-2 max-w-2xl mx-auto">
+                This project is free to use. If you find it valuable, consider supporting the developer to keep the servers running.
+              </p>
+            </div>
+
+            <div className="max-w-4xl mx-auto">
+              <Card className="overflow-hidden border-2 border-primary/10 shadow-xl">
+                <div className="grid grid-cols-1 md:grid-cols-2">
+                  <div className="bg-gradient-to-br from-primary/5 to-violet-500/5 p-8 flex flex-col items-center justify-center border-r border-border/50">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border mb-4">
+                      <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-48 h-48 object-contain rounded-lg border-2 border-slate-100" />
+                    </div>
+                    <p className="font-mono text-sm bg-white px-3 py-1 rounded-full border shadow-sm">
+                      9175988560@kotak811
+                    </p>
+                  </div>
+                  <div className="p-8 flex flex-col justify-center space-y-6">
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-bold flex items-center gap-2">
+                        <Heart className="h-6 w-6 text-red-500 fill-red-500 animate-pulse" />
+                        Why Contribute?
+                      </h3>
+                      <p className="text-muted-foreground">
+                        Your support helps cover:
+                      </p>
+                    </div>
+                    <ul className="space-y-3">
+                      <li className="flex items-center gap-3 text-sm">
+                        <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0">
+                          <Zap className="h-4 w-4" />
+                        </div>
+                        <span>Server & Database Costs</span>
+                      </li>
+
+                      <li className="flex items-center gap-3 text-sm">
+                        <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
+                          <Sparkles className="h-4 w-4" />
+                        </div>
+                        <span>Future Development & Features</span>
+                      </li>
+                    </ul>
+                    <div className="pt-4">
+                      <Button className="w-full" variant="outline" asChild>
+                        <a href="mailto:vedantwankhade47@gmail.com">Contact Developer</a>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </section>
+
         {/* Connect Section */}
         <section id="connect" ref={connectRef} className="py-20 bg-muted/50">
           <div className="container mx-auto px-4">
@@ -464,50 +533,32 @@ const Landing = () => {
                 I'm passionate about building great products. Let's connect and create something amazing together!
               </p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
-              <div className="flex flex-col items-center p-4 transition-all">
-                <div className="p-3 bg-primary/10 rounded-full mb-3">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-3xl font-bold mb-1">{stats.totalUsers.toLocaleString()}+</h3>
-                <p className="text-muted-foreground text-sm">Active Users</p>
-              </div>
-              <div className="flex flex-col items-center p-4 transition-all">
-                <div className="p-3 bg-primary/10 rounded-full mb-3">
-                  <FileText className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-3xl font-bold mb-1">{stats.totalResumes.toLocaleString()}+</h3>
-                <p className="text-muted-foreground text-sm">Resumes Created</p>
-              </div>
-              <div className="flex flex-col items-center p-4 transition-all">
-                <div className="p-3 bg-primary/10 rounded-full mb-3">
-                  <Download className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-3xl font-bold mb-1">{stats.totalDownloads.toLocaleString()}+</h3>
-                <p className="text-muted-foreground text-sm">Downloads</p>
-              </div>
-              <div className="flex flex-col items-center p-4 transition-all">
-                <div className="p-3 bg-primary/10 rounded-full mb-3">
-                  <Star className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-3xl font-bold mb-1">4.9</h3>
-                <p className="text-muted-foreground text-sm">User Rating</p>
-              </div>
-            </div>
+
 
             <div className="flex justify-center items-center flex-wrap gap-6 md:gap-8">
+
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <a href="https://github.com/vedantwankhade123/biocv" target="_blank" rel="noopener noreferrer" className="group">
+                  <button onClick={() => {
+                    navigator.share({
+                      title: 'NeuCV - AI Resume Builder',
+                      text: 'Check out this amazing free AI Resume Builder!',
+                      url: window.location.href
+                    }).catch(() => {
+                      navigator.clipboard.writeText(window.location.href);
+                      toast({ title: "Link Copied!", description: "Share it with your friends." });
+                    });
+                  }} className="group">
                     <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center border-2 group-hover:border-primary transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg">
-                      <Github className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <Share2 className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
-                  </a>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>GitHub: vedantwankhade123/biocv</p>
+                  <p>Share with Friends</p>
                 </TooltipContent>
               </Tooltip>
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <a href="mailto:vedantwankhade47@gmail.com" target="_blank" rel="noopener noreferrer" className="group">

@@ -1,29 +1,37 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const getApiKey = () => {
+  const customKey = localStorage.getItem('gemini_api_key');
+  if (!customKey) {
+    throw new Error('No API key found. Please add your Gemini API key in Settings.');
+  }
+  return customKey;
+};
 
-if (!API_KEY) {
-  console.error('Gemini API key is not configured');
-} else {
-  console.log('Gemini Config Status:', {
-    keyPresent: !!API_KEY,
-    keyLength: API_KEY ? API_KEY.length : 0,
-    keyPrefix: API_KEY ? API_KEY.substring(0, 5) + '...' : 'N/A'
+// Initialize with a placeholder, actual key will be fetched dynamically
+let API_KEY = '';
+try {
+  API_KEY = getApiKey();
+  console.log('Gemini API Key Status:', {
+    keyPresent: true,
+    keyPrefix: API_KEY.substring(0, 5) + '...'
   });
+} catch (e) {
+  console.warn('No user API key configured yet. User must add key in Settings.');
 }
 
-const genAI = new GoogleGenerativeAI(API_KEY || '');
+const genAI = new GoogleGenerativeAI(API_KEY || 'placeholder');
 
 // Helper to clean and parse JSON from AI response
 const cleanAndParseJSON = (text: string) => {
   try {
     // Remove markdown code blocks if present
     let cleaned = text.replace(/```json\n?|```/g, '').trim();
-    
+
     // Find the JSON object or array
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
-    
+
     let startIndex = -1;
     // Determine which comes first to decide if it's an object or array
     if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
@@ -64,40 +72,50 @@ const MODEL_FALLBACKS = [
 ];
 
 export const generateContent = async (prompt: string, preferredModel: string = 'gemini-1.5-flash') => {
-  if (!API_KEY) {
-    throw new Error('Gemini API key is not configured. Please add VITE_GEMINI_API_KEY to your .env file and RESTART the dev server.');
+  let currentKey;
+  try {
+    currentKey = getApiKey();
+  } catch (error) {
+    throw new Error('Please add your Gemini API key in Settings to use AI features. Get a free key at https://aistudio.google.com/app/apikey');
   }
+
+  // Re-initialize if key changed (simple way is to just create new instance here or rely on the global one if page reloads)
+  // For robustness in this function, let's use a local instance if we want to support hot-swapping without reload, 
+  // but the global `genAI` is initialized at module load. 
+  // To support dynamic key changes without reload, we should re-instantiate genAI here or make genAI a function.
+  // For now, let's assume the user might reload or we just re-create the client here for safety if using custom key.
+  const dynamicGenAI = new GoogleGenerativeAI(currentKey);
 
   // Create a unique list starting with preferred model
   const modelsToTry = [...new Set([preferredModel, ...MODEL_FALLBACKS])];
-  
+
   let lastError: any = null;
 
   for (const modelName of modelsToTry) {
     try {
-      const model = genAI.getGenerativeModel({ model: modelName });
+      const model = dynamicGenAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent(prompt);
       const response = result.response;
       const text = response.text();
       return text;
     } catch (error: any) {
       lastError = error;
-      
-      const isModelError = error.message?.includes('404') || 
-                           error.message?.includes('not found') || 
-                           error.message?.includes('not supported');
-                           
+
+      const isModelError = error.message?.includes('404') ||
+        error.message?.includes('not found') ||
+        error.message?.includes('not supported');
+
       if (!isModelError) {
         console.error(`Gemini API Error (${modelName}):`, error);
         throw new Error(error?.message || 'Gemini API request failed.');
       }
-      
+
       console.warn(`Model ${modelName} failed (${error.status || 'unknown'}), trying next...`);
     }
   }
 
   console.error('All Gemini models failed. Last error:', lastError);
-  
+
   if (lastError?.message?.includes('404')) {
     throw new Error('API Error: Models not found. Please ensure "Generative Language API" is ENABLED in your Google Cloud Console for this API key.');
   }
@@ -106,10 +124,10 @@ export const generateContent = async (prompt: string, preferredModel: string = '
 };
 
 export const generateResumeSummary = async (
-  jobTitle: string, 
-  experience: any[] | string, 
-  education: any[], 
-  skills: string[], 
+  jobTitle: string,
+  experience: any[] | string,
+  education: any[],
+  skills: string[],
   achievements: string = '',
   tone: string = 'professional',
   modelName?: string
@@ -122,7 +140,7 @@ export const generateResumeSummary = async (
   }
 
   const skillsText = skills.join(', ');
-  
+
   const prompt = `You are an expert executive resume writer. Write a compelling, high-impact professional summary for a ${jobTitle}.
   
   Candidate Profile:
@@ -139,7 +157,7 @@ export const generateResumeSummary = async (
   - Integrate relevant ATS keywords for a ${jobTitle} role.
   
   Return ONLY the summary paragraph text. No markdown, no quotes.`;
-  
+
   return (await generateContent(prompt, modelName)).trim();
 };
 
@@ -156,7 +174,7 @@ export const generateExperienceDescription = async (role: string, company: strin
   - Tailor the language to be highly relevant for a ${role} position.
   
   Return ONLY the bullet points as a plain list (using •). Do not include any introductory text or markdown headers.`;
-  
+
   return (await generateContent(prompt, modelName)).trim();
 };
 
@@ -169,7 +187,7 @@ export const generateSkills = async (jobTitle: string, modelName?: string): Prom
   - Balance technical proficiency with essential soft skills (e.g., Leadership, Strategic Planning).
   
   Return ONLY a comma-separated list of skills. No categories, no bullet points.`;
-  
+
   return (await generateContent(prompt, modelName)).trim();
 };
 
@@ -187,7 +205,7 @@ export const generateContextAwareSkills = async (resumeData: any, count: number 
   - Exclude generic or weak skills.
   
   Return ONLY a comma-separated list of skills.`;
-  
+
   return (await generateContent(prompt, modelName)).trim();
 };
 
@@ -283,7 +301,7 @@ export const processResumeAgentPrompt = async (
   try {
     const responseText = await generateContent(prompt, modelName);
     const parsed = cleanAndParseJSON(responseText);
-    
+
     return {
       message: parsed.message || "I've processed your request.",
       updates: parsed.updates || {},

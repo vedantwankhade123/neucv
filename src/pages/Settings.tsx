@@ -21,11 +21,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 
 import { auth } from '@/lib/firebase';
@@ -33,11 +33,13 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { getUserProfile, addCredits } from '@/lib/user-service';
 import { Sparkles, CreditCard } from 'lucide-react';
 import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
+import { Key, Heart, QrCode } from 'lucide-react';
+import { Input } from "@/components/ui/input";
 
 const Settings = () => {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [user, loading] = useAuthState(auth);
-  
+
   // Settings state
   const [interviewSettings, setInterviewSettings] = useState({
     interviewTTS: true,
@@ -48,11 +50,28 @@ const Settings = () => {
   useEffect(() => {
     const settings = getAutoSaveSettings();
     setInterviewSettings({
-        interviewTTS: settings.interviewTTS,
-        defaultLanguage: settings.defaultLanguage || 'english',
-        silenceDuration: settings.silenceDuration || 5000
+      interviewTTS: settings.interviewTTS,
+      defaultLanguage: settings.defaultLanguage || 'english',
+      silenceDuration: settings.silenceDuration || 5000
     });
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) setApiKey(savedKey);
   }, []);
+
+  const [apiKey, setApiKey] = useState('');
+
+  const handleSaveApiKey = () => {
+    localStorage.setItem('gemini_api_key', apiKey);
+    showSuccess("API Key saved successfully! Please refresh the page.");
+    setTimeout(() => window.location.reload(), 1500);
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem('gemini_api_key');
+    setApiKey('');
+    showSuccess("API Key removed. Using default quota.");
+    setTimeout(() => window.location.reload(), 1500);
+  };
 
   const handleInterviewSettingChange = (key: string, value: any) => {
     setInterviewSettings(prev => ({ ...prev, [key]: value }));
@@ -190,6 +209,45 @@ const Settings = () => {
             </Card>
           </div>
 
+
+
+          {/* AI Configuration Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-medium text-muted-foreground ml-1">AI Configuration</h2>
+            <Card className={cardClasses}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Key className="h-5 w-5 text-muted-foreground" />
+                  Bring Your Own Key (BYOK)
+                </CardTitle>
+                <CardDescription>
+                  <strong>Required:</strong> Add your own Google Gemini API Key to use all AI features.
+                  <br />
+                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    Get a free key here
+                  </a>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    placeholder="Paste your Gemini API Key here"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                  <Button onClick={handleSaveApiKey}>Save Key</Button>
+                  {localStorage.getItem('gemini_api_key') && (
+                    <Button variant="outline" onClick={handleClearApiKey}>Clear</Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your key is stored locally in your browser and never sent to our servers.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Interview Coach Settings */}
           <div className="space-y-4">
             <h2 className="text-lg font-medium text-muted-foreground ml-1">Interview Coach</h2>
@@ -203,128 +261,112 @@ const Settings = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                            <Volume2 className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label htmlFor="interview-tts" className="text-base font-medium cursor-pointer">
-                                AI Voice (Text-to-Speech)
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                                Read interview questions aloud
-                            </p>
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-md">
+                      <Volume2 className="h-5 w-5 text-primary" />
                     </div>
-                    <Switch
-                        id="interview-tts"
-                        checked={interviewSettings.interviewTTS}
-                        onCheckedChange={(checked) => handleInterviewSettingChange('interviewTTS', checked)}
-                    />
+                    <div className="space-y-0.5">
+                      <Label htmlFor="interview-tts" className="text-base font-medium cursor-pointer">
+                        AI Voice (Text-to-Speech)
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Read interview questions aloud
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="interview-tts"
+                    checked={interviewSettings.interviewTTS}
+                    onCheckedChange={(checked) => handleInterviewSettingChange('interviewTTS', checked)}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                            <Timer className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5 w-full">
-                            <Label htmlFor="silence-duration" className="text-base font-medium">
-                                Auto-Stop Microphone (Silence)
-                            </Label>
-                            <p className="text-sm text-muted-foreground mb-3">
-                                Stop recording after detecting silence for: <strong>{interviewSettings.silenceDuration / 1000}s</strong>
-                            </p>
-                            <Slider
-                                id="silence-duration"
-                                min={2000}
-                                max={10000}
-                                step={500}
-                                value={[interviewSettings.silenceDuration]}
-                                onValueChange={(val) => handleInterviewSettingChange('silenceDuration', val[0])}
-                                className="w-full max-w-xs"
-                            />
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-md">
+                      <Timer className="h-5 w-5 text-primary" />
                     </div>
+                    <div className="space-y-0.5 w-full">
+                      <Label htmlFor="silence-duration" className="text-base font-medium">
+                        Auto-Stop Microphone (Silence)
+                      </Label>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Stop recording after detecting silence for: <strong>{interviewSettings.silenceDuration / 1000}s</strong>
+                      </p>
+                      <Slider
+                        id="silence-duration"
+                        min={2000}
+                        max={10000}
+                        step={500}
+                        value={[interviewSettings.silenceDuration]}
+                        onValueChange={(val) => handleInterviewSettingChange('silenceDuration', val[0])}
+                        className="w-full max-w-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                            <Globe className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label htmlFor="default-language" className="text-base font-medium">
-                                Default Interview Language
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                                Set your preferred language for new interview sessions
-                            </p>
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-md">
+                      <Globe className="h-5 w-5 text-primary" />
                     </div>
-                    <Select 
-                        value={interviewSettings.defaultLanguage} 
-                        onValueChange={(value) => handleInterviewSettingChange('defaultLanguage', value)}
-                    >
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select Language" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="english">English</SelectItem>
-                            <SelectItem value="hinglish">Hinglish</SelectItem>
-                            <SelectItem value="hindi">Hindi</SelectItem>
-                            <SelectItem value="marathi">Marathi</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="space-y-0.5">
+                      <Label htmlFor="default-language" className="text-base font-medium">
+                        Default Interview Language
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Set your preferred language for new interview sessions
+                      </p>
+                    </div>
+                  </div>
+                  <Select
+                    value={interviewSettings.defaultLanguage}
+                    onValueChange={(value) => handleInterviewSettingChange('defaultLanguage', value)}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="english">English</SelectItem>
+                      <SelectItem value="hinglish">Hinglish</SelectItem>
+                      <SelectItem value="hindi">Hindi</SelectItem>
+                      <SelectItem value="marathi">Marathi</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* AI Credits Section */}
+
+
+          {/* Contribute Section */}
           <div className="space-y-4">
-            <h2 className="text-lg font-medium text-muted-foreground ml-1">AI Credits</h2>
+            <h2 className="text-lg font-medium text-muted-foreground ml-1">Support Development</h2>
             <Card className={cardClasses}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-purple-500" />
-                  AI Usage & Credits
+                  <Heart className="h-5 w-5 text-red-500" />
+                  Contribute
                 </CardTitle>
-                <CardDescription>Manage your credits for AI generation features.</CardDescription>
+                <CardDescription>
+                  This project is free and open source. If you find it useful, consider supporting the developer.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl border">
+              <CardContent className="flex flex-col md:flex-row gap-6 items-center">
+                <div className="bg-white p-4 rounded-xl border shadow-sm">
+                  <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-48 h-48 object-contain rounded-lg border-2 border-slate-100" />
+                </div>
+                <div className="space-y-4 text-center md:text-left">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Available Credits</p>
-                    <h3 className="text-3xl font-bold text-primary">{credits !== null ? credits : '...'}</h3>
+                    <h4 className="font-semibold">Vedant Wankhade</h4>
+                    <p className="text-sm text-muted-foreground">UPI ID: 9175988560@kotak811</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-1">Free Plan includes 5 initial credits.</p>
-                    <p className="text-xs text-muted-foreground">1 Generation = 1 Credit</p>
-                  </div>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    Your contributions help cover server costs and keep the project alive. Thank you!
+                  </p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Button variant="outline" className="h-auto py-4 flex flex-col items-start gap-1" onClick={() => handleBuyCredits(10, '$4.99')}>
-                    <div className="flex items-center gap-2 w-full">
-                      <CreditCard className="h-4 w-4" />
-                      <span className="font-semibold">Buy 10 Credits</span>
-                      <span className="ml-auto text-sm text-muted-foreground">$4.99</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Perfect for a few resumes.</p>
-                  </Button>
-                  <Button variant="outline" className="h-auto py-4 flex flex-col items-start gap-1" onClick={() => handleBuyCredits(50, '$19.99')}>
-                    <div className="flex items-center gap-2 w-full">
-                      <CreditCard className="h-4 w-4" />
-                      <span className="font-semibold">Buy 50 Credits</span>
-                      <span className="ml-auto text-sm text-muted-foreground">$19.99</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Best value for power users.</p>
-                  </Button>
-                </div>
-                <p className="text-xs text-center text-muted-foreground italic">
-                  * This is a demo payment system. No actual money will be charged.
-                </p>
               </CardContent>
             </Card>
           </div>
@@ -405,17 +447,13 @@ const Settings = () => {
                     <p className="text-sm text-muted-foreground">Version 1.0.0</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" asChild>
-                  <a href="https://github.com/vedantwankhade123/biocv" target="_blank" rel="noopener noreferrer">
-                    <Github className="h-5 w-5 text-muted-foreground" />
-                  </a>
-                </Button>
+
               </CardContent>
             </Card>
           </div>
 
         </div>
-      </main>
+      </main >
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -432,7 +470,7 @@ const Settings = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 };
 

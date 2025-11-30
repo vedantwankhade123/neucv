@@ -29,6 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 import { SummaryGenerationDialog, SummaryGenerationData } from './SummaryGenerationDialog';
 import { SkillsGenerationDialog } from './SkillsGenerationDialog';
 
+
 interface ResumeFormProps {
   resumeData: ResumeData;
   setResumeData: React.Dispatch<React.SetStateAction<ResumeData>>;
@@ -115,6 +116,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
     setIsSummaryDialogOpen(false);
     try {
+
+
       const summary = await generateResumeSummary(
         data.jobTitle || resumeData.title,
         data.experience || resumeData.experience,
@@ -164,6 +167,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
 
     try {
+
+
       const description = await generateExperienceDescription(
         exp.role,
         exp.company,
@@ -318,6 +323,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
 
     try {
+
+
       const keywords = section.organization || section.content || '';
       const content = await generateCustomSectionContent(
         section.title || 'Custom Section',
@@ -381,6 +388,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
 
     try {
+
+
       const keywords = item.title || item.subtitle || item.description || '';
       const content = await generateCustomSectionContent(
         section.title || 'Custom Section',

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ResumeStyle } from '@/types/resume';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Eye, FileText, MessageCircle } from 'lucide-react';
+import { ArrowRight, Eye, FileText, MessageCircle, Key } from 'lucide-react';
 import { resumeTemplates } from '@/lib/resume-templates';
 import { cn } from '@/lib/utils';
 import { previewDataMap } from '@/data/previewData';
@@ -149,6 +149,20 @@ const Home = () => {
               <div className="text-center">
                 <h3 className="font-semibold text-lg mb-1">Interview Coach</h3>
                 <p className="text-sm text-muted-foreground">Practice with AI interviewer</p>
+              </div>
+            </div>
+
+            {/* Add API Key Card */}
+            <div
+              className="border-2 border-dashed rounded-2xl hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center gap-4 aspect-[3/2]"
+              onClick={() => navigate('/settings')}
+            >
+              <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <Key className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="text-center">
+                <h3 className="font-semibold text-lg mb-1">Add API Key</h3>
+                <p className="text-sm text-muted-foreground">Use your own Gemini Key</p>
               </div>
             </div>
           </div>

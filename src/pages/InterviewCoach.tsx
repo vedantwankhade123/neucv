@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-    Mic, MicOff, Square, Volume2, Loader2, Bot, Sparkles, 
+import {
+    Mic, MicOff, Square, Volume2, Loader2, Bot, Sparkles,
     CheckCircle2, ArrowRight, Clock, Settings, Home, Keyboard, SkipForward, Quote
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,16 +22,76 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
+
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '@/lib/firebase';
+
+// --- Type Definitions for Web Speech API ---
+interface SpeechRecognition extends EventTarget {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    start(): void;
+    stop(): void;
+    abort(): void;
+    onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+    onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+    onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+    onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+}
+
+interface SpeechRecognitionEvent extends Event {
+    resultIndex: number;
+    results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+    length: number;
+    item(index: number): SpeechRecognitionResult;
+    [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+    isFinal: boolean;
+    length: number;
+    item(index: number): SpeechRecognitionAlternative;
+    [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+    transcript: string;
+    confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+    error: string;
+    message: string;
+}
+
+// Extend Window interface to include SpeechRecognition
+declare global {
+    interface Window {
+        SpeechRecognition: {
+            new(): SpeechRecognition;
+        };
+        webkitSpeechRecognition: {
+            new(): SpeechRecognition;
+        };
+        webkitAudioContext: {
+            new(): AudioContext;
+        };
+    }
+}
 
 type InterviewPhase = 'interview' | 'report';
 type InputMode = 'voice' | 'text';
@@ -39,10 +99,10 @@ type InputMode = 'voice' | 'text';
 const InterviewCoach = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    
+
     // Refs
     const timerIntervalRef = useRef<number | null>(null);
-    const recognitionRef = useRef<any>(null);
+    const recognitionRef = useRef<SpeechRecognition | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -50,11 +110,11 @@ const InterviewCoach = () => {
     const animationFrameRef = useRef<number | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    
+
     // Silence detection refs
     const lastAudioTimeRef = useRef<number>(Date.now());
     const silenceDurationRef = useRef<number>(5000);
-    
+
     // Function refs
     const startListeningRef = useRef<() => void>(null);
     const stopListeningRef = useRef<() => void>(null);
@@ -84,6 +144,7 @@ const InterviewCoach = () => {
     const [questionStartTime, setQuestionStartTime] = useState(0);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState(0);
+    const [user] = useAuthState(auth);
 
     const inputModeRef = useRef(inputMode);
     useEffect(() => { inputModeRef.current = inputMode; }, [inputMode]);
@@ -106,7 +167,7 @@ const InterviewCoach = () => {
         const height = canvas.height;
         const centerX = width / 2;
         const centerY = height / 2;
-        
+
         // Base radius for the ring
         const baseRadius = Math.min(width, height) / 3.2;
 
@@ -122,7 +183,7 @@ const InterviewCoach = () => {
         if (isListening && analyserRef.current && dataArrayRef.current) {
             // User Speaking (Microphone)
             mode = 'user';
-            analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+            analyserRef.current.getByteFrequencyData(dataArrayRef.current as Uint8Array);
             let sum = 0;
             for (let i = 0; i < 128; i++) {
                 frequencyData[i] = dataArrayRef.current[i];
@@ -131,8 +192,8 @@ const InterviewCoach = () => {
             volume = sum / 128;
 
             // --- Silence Detection Logic ---
-            const silenceThreshold = 15; 
-            
+            const silenceThreshold = 15;
+
             if (volume > silenceThreshold) {
                 lastAudioTimeRef.current = Date.now();
             } else {
@@ -149,14 +210,14 @@ const InterviewCoach = () => {
             // AI Speaking (Simulation)
             mode = 'ai';
             const t = Date.now() / 1000;
-            
-            const rhythm = Math.sin(t * 12); 
-            const variation = Math.cos(t * 5.5); 
-            const noise = Math.random() * 0.2; 
-            
+
+            const rhythm = Math.sin(t * 12);
+            const variation = Math.cos(t * 5.5);
+            const noise = Math.random() * 0.2;
+
             const envelope = (Math.max(0, rhythm * variation) + 0.3 + noise);
-            volume = Math.min(255, envelope * 100); 
-            
+            volume = Math.min(255, envelope * 100);
+
             for (let i = 0; i < 128; i++) {
                 const offset = i * 0.15;
                 const wave = Math.sin(offset + t * 15) * Math.cos(offset * 0.5 - t * 8);
@@ -168,7 +229,7 @@ const InterviewCoach = () => {
             const t = Date.now() / 2000;
             volume = Math.sin(t) * 5 + 15;
             for (let i = 0; i < 128; i++) {
-                frequencyData[i] = 10 + Math.sin(i * 0.2 + t) * 5 + Math.random() * 5; 
+                frequencyData[i] = 10 + Math.sin(i * 0.2 + t) * 5 + Math.random() * 5;
             }
         }
 
@@ -176,48 +237,48 @@ const InterviewCoach = () => {
         ctx.translate(centerX, centerY);
 
         // --- Unified Filament Ring Visualizer ---
-        
+
         const scale = 1 + (volume / 255) * 0.08;
         ctx.scale(scale, scale);
-        
+
         const time = Date.now() / 1000;
         ctx.rotate(time * 0.05);
 
-        ctx.globalCompositeOperation = 'screen'; 
+        ctx.globalCompositeOperation = 'screen';
 
         const particles = 720;
         const angleStep = (Math.PI * 2) / particles;
 
         for (let i = 0; i < particles; i++) {
             const angle = i * angleStep;
-            
+
             const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
             const freqValue = frequencyData[freqIndex] || 0;
-            
+
             let hue;
             let saturation = 100;
-            let lightness = 50 + (freqValue / 255) * 40; 
+            let lightness = 50 + (freqValue / 255) * 40;
             let alpha = 0.2 + (freqValue / 255) * 0.8;
-            
+
             if (mode === 'user') {
-                hue = (i * 0.5 + time * 60 + freqValue * 0.5) % 360; 
+                hue = (i * 0.5 + time * 60 + freqValue * 0.5) % 360;
                 saturation = 90;
                 lightness = 60 + (freqValue / 255) * 30;
             } else if (mode === 'ai') {
-                hue = 190 + (Math.sin(angle + time) * 30); 
+                hue = 190 + (Math.sin(angle + time) * 30);
             } else {
                 hue = 210;
                 saturation = 20;
-                alpha = 0.1 + (freqValue / 255) * 0.5; 
+                alpha = 0.1 + (freqValue / 255) * 0.5;
             }
 
             ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
             ctx.lineWidth = 1.5;
 
             const rStart = baseRadius;
-            const rEnd = baseRadius + 15 + (freqValue / 255) * 80; 
-            const swirl = 0.15 + (freqValue / 255) * 0.15; 
-            
+            const rEnd = baseRadius + 15 + (freqValue / 255) * 80;
+            const swirl = 0.15 + (freqValue / 255) * 0.15;
+
             const x1 = Math.cos(angle) * rStart;
             const y1 = Math.sin(angle) * rStart;
             const x2 = Math.cos(angle + swirl) * rEnd;
@@ -236,17 +297,17 @@ const InterviewCoach = () => {
         ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
         ctx.lineWidth = 2;
         const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
-        
+
         if (mode === 'user') {
-             rimGradient.addColorStop(0, 'rgba(255, 50, 150, 0.8)');
-             rimGradient.addColorStop(0.5, 'rgba(255, 200, 50, 0.8)');
-             rimGradient.addColorStop(1, 'rgba(50, 100, 255, 0.8)');
+            rimGradient.addColorStop(0, 'rgba(255, 50, 150, 0.8)');
+            rimGradient.addColorStop(0.5, 'rgba(255, 200, 50, 0.8)');
+            rimGradient.addColorStop(1, 'rgba(50, 100, 255, 0.8)');
         } else if (mode === 'ai') {
-             rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)');
-             rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)');
+            rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)');
+            rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)');
         } else {
-             rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)'); 
-             rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
+            rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)');
+            rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
         }
 
         ctx.strokeStyle = rimGradient;
@@ -298,7 +359,7 @@ const InterviewCoach = () => {
             setQuestionStartTime(Date.now());
             const settings = getAutoSaveSettings();
             setIsTTSEnabled(settings.interviewTTS);
-            
+
             silenceDurationRef.current = data.setupData.silenceDuration || 5000;
         } else {
             navigate('/dashboard/interview');
@@ -323,7 +384,7 @@ const InterviewCoach = () => {
     const startAudioAnalysis = async () => {
         try {
             if (!audioContextRef.current) {
-                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
             }
             if (!mediaStreamRef.current) {
                 mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -336,7 +397,7 @@ const InterviewCoach = () => {
             analyserRef.current = audioContextRef.current.createAnalyser();
             analyserRef.current.fftSize = 256;
             source.connect(analyserRef.current);
-            
+
             const bufferLength = analyserRef.current.frequencyBinCount;
             dataArrayRef.current = new Uint8Array(bufferLength);
 
@@ -344,20 +405,20 @@ const InterviewCoach = () => {
 
             const updateVolume = () => {
                 if (!analyserRef.current || !dataArrayRef.current) return;
-                analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-                
+                analyserRef.current.getByteFrequencyData(dataArrayRef.current as Uint8Array);
+
                 let sum = 0;
                 for (let i = 0; i < bufferLength; i++) {
                     sum += dataArrayRef.current[i];
                 }
                 const average = sum / bufferLength;
-                const level = Math.min(100, Math.round(average * 2)); 
+                const level = Math.min(100, Math.round(average * 2));
                 setAudioLevel(level);
-                
+
                 animationFrameRef.current = requestAnimationFrame(updateVolume);
             };
             updateVolume();
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Error starting audio analysis:", error);
         }
     };
@@ -370,14 +431,14 @@ const InterviewCoach = () => {
 
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        
+
         const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(v => 
-            v.name.includes('Google US English') || 
+        const preferredVoice = voices.find(v =>
+            v.name.includes('Google US English') ||
             v.name.includes('Samantha') ||
             v.name.includes('Neural')
         ) || voices[0];
-        
+
         if (preferredVoice) utterance.voice = preferredVoice;
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
@@ -416,7 +477,7 @@ const InterviewCoach = () => {
 
     useEffect(() => {
         if (phase === 'interview' && typeof window !== 'undefined') {
-            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
                 const recognition = new SpeechRecognition();
                 recognition.continuous = true;
@@ -427,7 +488,7 @@ const InterviewCoach = () => {
                     setIsListening(true);
                 };
 
-                recognition.onresult = (event: any) => {
+                recognition.onresult = (event: SpeechRecognitionEvent) => {
                     let finalTranscript = '';
                     for (let i = event.resultIndex; i < event.results.length; i++) {
                         const transcript = event.results[i][0].transcript;
@@ -442,7 +503,7 @@ const InterviewCoach = () => {
                     }
                 };
 
-                recognition.onerror = (event: any) => {
+                recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
                     if (event.error !== 'no-speech') {
                         setIsListening(false);
                     }
@@ -464,13 +525,13 @@ const InterviewCoach = () => {
         if (!interviewData || !currentQuestion || phase !== 'interview') return;
 
         const questionText = currentQuestion.question;
-        
+
         setDisplayedQuestion('');
         setIsTyping(true);
         setCurrentAnswer('');
         setIsSubmitting(false);
         setQuestionStartTime(Date.now());
-        
+
         stopListening();
         stopTTS();
 
@@ -521,7 +582,7 @@ const InterviewCoach = () => {
 
     const handleSubmitAnswer = async () => {
         if (!interviewData || isSubmitting || !currentAnswer.trim()) return;
-        
+
         stopListening();
         stopTTS();
         setIsSubmitting(true);
@@ -541,7 +602,7 @@ const InterviewCoach = () => {
             const updatedData = { ...interviewData, responses: updatedResponses };
 
             setInterviewData(updatedData);
-            
+
             if (currentQuestionIndex + 1 >= interviewData.questions.length) {
                 await completeInterview(updatedData);
             } else {
@@ -549,10 +610,11 @@ const InterviewCoach = () => {
                 toast.success('Answer Submitted', { description: 'Moving to next question...' });
             }
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error submitting answer:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Please try again.';
             toast.error('Submission Failed', {
-                description: error.message || 'Please try again.'
+                description: errorMessage
             });
         } finally {
             setIsSubmitting(false);
@@ -561,7 +623,7 @@ const InterviewCoach = () => {
 
     const handleSkip = async () => {
         if (!interviewData || isSubmitting) return;
-        
+
         stopListening();
         stopTTS();
         setIsSubmitting(true);
@@ -581,7 +643,7 @@ const InterviewCoach = () => {
             const updatedData = { ...interviewData, responses: updatedResponses };
 
             setInterviewData(updatedData);
-            
+
             if (currentQuestionIndex + 1 >= interviewData.questions.length) {
                 await completeInterview(updatedData);
             } else {
@@ -589,7 +651,7 @@ const InterviewCoach = () => {
                 toast.info('Question Skipped');
             }
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error skipping question:', error);
         } finally {
             setIsSubmitting(false);
@@ -603,13 +665,15 @@ const InterviewCoach = () => {
         setAnalysisProgress(0);
 
         try {
+
+
             const totalResponses = finalData.responses.length;
             const evaluatedResponses: InterviewResponse[] = [];
 
             for (let i = 0; i < totalResponses; i++) {
                 const response = finalData.responses[i];
                 const question = finalData.questions.find(q => q.id === response.questionId);
-                
+
                 // Don't evaluate skipped questions
                 if (question && response.answer !== "Skipped by user.") {
                     setAnalysisProgress(Math.round(((i) / totalResponses) * 60));
@@ -638,12 +702,12 @@ const InterviewCoach = () => {
 
             setInterviewData(completedData);
             setPhase('report');
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Report generation failed:', error);
             toast.error("Report Generation Failed", {
                 description: "Could not generate full analysis. Showing transcript only."
             });
-            
+
             // Create minimal fallback report to prevent crashes
             const fallbackReport = {
                 overallScore: 0,
@@ -659,7 +723,7 @@ const InterviewCoach = () => {
                 status: 'completed',
                 report: fallbackReport
             }) : null);
-            
+
             setPhase('report');
         } finally {
             setIsGeneratingReport(false);
@@ -693,7 +757,7 @@ const InterviewCoach = () => {
             timerIntervalRef.current = window.setInterval(() => {
                 const elapsed = Math.floor((Date.now() - interviewData.startTime) / 1000);
                 setElapsedTime(elapsed);
-                
+
                 // Check if time limit reached
                 const totalDurationSeconds = interviewData.setupData.duration * 60;
                 if (elapsed >= totalDurationSeconds) {
@@ -760,7 +824,7 @@ const InterviewCoach = () => {
                         </div>
                     </div>
                 </div>
-                
+
                 {/* Center: Progress Bar */}
                 <div className="flex-1 max-w-md mx-4 hidden md:flex flex-col gap-1.5 justify-center">
                     <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 tracking-wider">
@@ -769,7 +833,7 @@ const InterviewCoach = () => {
                     </div>
                     <Progress value={progress} className="h-1.5" />
                 </div>
-                
+
                 {/* Right Side: Timer & Controls */}
                 <div className="flex items-center gap-3 min-w-[200px] justify-end">
                     <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
@@ -797,13 +861,13 @@ const InterviewCoach = () => {
                             </div>
                         </PopoverContent>
                     </Popover>
-                    <Button 
-                        variant="destructive" 
-                        size="sm" 
+                    <Button
+                        variant="destructive"
+                        size="sm"
                         onClick={handleFinishClick}
                         className="h-9 px-3 sm:px-4 text-xs gap-2 shadow-sm hover:shadow transition-all"
                     >
-                        <Square className="h-3 w-3 fill-current" /> 
+                        <Square className="h-3 w-3 fill-current" />
                         <span className="hidden sm:inline">Finish</span>
                     </Button>
                 </div>
@@ -812,7 +876,7 @@ const InterviewCoach = () => {
             {/* Main Workspace - Full Width */}
             <main className="flex-grow p-4 md:p-6 overflow-hidden bg-slate-50/50">
                 <div className="w-full h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
-                    
+
                     {/* Left: AI Avatar & Visualization */}
                     <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[300px]">
                         <Card className="flex-grow bg-black rounded-3xl border-0 shadow-2xl relative flex flex-col items-center justify-center p-0 overflow-hidden group ring-1 ring-white/10">
@@ -820,9 +884,9 @@ const InterviewCoach = () => {
                             <div className="absolute top-6 left-0 right-0 flex justify-center z-20">
                                 <Badge variant="outline" className={cn(
                                     "backdrop-blur-md px-4 py-1.5 text-xs uppercase tracking-wider font-semibold border-white/10 transition-all duration-300",
-                                    isListening ? "bg-purple-500/10 text-purple-400 border-purple-500/20" : 
-                                    isAiSpeaking ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" :
-                                    "bg-white/5 text-slate-400"
+                                    isListening ? "bg-purple-500/10 text-purple-400 border-purple-500/20" :
+                                        isAiSpeaking ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" :
+                                            "bg-white/5 text-slate-400"
                                 )}>
                                     {isAiSpeaking ? 'AI Speaking' : isListening ? 'Listening' : 'Ready'}
                                 </Badge>
@@ -830,9 +894,9 @@ const InterviewCoach = () => {
 
                             {/* Canvas Visualizer - Centered & Full */}
                             <div className="absolute inset-0 z-10 flex items-center justify-center">
-                                <canvas 
-                                    ref={canvasRef} 
-                                    width={500} 
+                                <canvas
+                                    ref={canvasRef}
+                                    width={500}
                                     height={500}
                                     className="w-full h-full object-contain"
                                 />
@@ -880,12 +944,12 @@ const InterviewCoach = () => {
 
                     {/* Right: Question & Input */}
                     <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[400px]">
-                        
+
                         {/* Question Card */}
                         <Card className="p-0 border-0 shadow-xl shadow-slate-200/60 rounded-[2rem] flex flex-col h-[320px] shrink-0 relative overflow-hidden bg-white group ring-1 ring-slate-100">
                             {/* Decorative Top Bar */}
                             <div className="h-1.5 w-full bg-gradient-to-r from-primary/80 via-primary to-primary/80" />
-                            
+
                             <div className="p-8 flex flex-col h-full relative z-10">
                                 {/* Header Row: Number & Badges */}
                                 <div className="flex items-center justify-between mb-6 flex-shrink-0">
@@ -899,8 +963,8 @@ const InterviewCoach = () => {
                                         <Badge variant="outline" className={cn(
                                             "text-xs capitalize px-3 py-1 border font-medium",
                                             currentQuestion?.difficulty === 'easy' ? "border-green-200 text-green-700 bg-green-50" :
-                                            currentQuestion?.difficulty === 'medium' ? "border-amber-200 text-amber-700 bg-amber-50" :
-                                            "border-red-200 text-red-700 bg-red-50"
+                                                currentQuestion?.difficulty === 'medium' ? "border-amber-200 text-amber-700 bg-amber-50" :
+                                                    "border-red-200 text-red-700 bg-red-50"
                                         )}>
                                             {currentQuestion?.difficulty}
                                         </Badge>
@@ -914,7 +978,7 @@ const InterviewCoach = () => {
                                         <div className="absolute -top-2 -left-2 text-slate-100 text-8xl font-serif leading-none select-none pointer-events-none transform -translate-y-4 -z-10">
                                             <Quote className="h-20 w-20 text-slate-50 fill-current opacity-50" />
                                         </div>
-                                        
+
                                         <h2 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug tracking-tight relative z-10">
                                             {displayedQuestion}
                                             {isTyping && (
@@ -950,7 +1014,7 @@ const InterviewCoach = () => {
                                     Switch to {inputMode === 'voice' ? 'Text' : 'Voice'}
                                 </Button>
                             </div>
-                            
+
                             <div className="relative flex-grow">
                                 <Textarea
                                     value={currentAnswer}
@@ -959,7 +1023,7 @@ const InterviewCoach = () => {
                                     className="h-full resize-none border-0 focus-visible:ring-0 text-lg p-6 leading-relaxed bg-transparent text-slate-800 placeholder:text-slate-300 font-medium"
                                     disabled={isSubmitting}
                                 />
-                                
+
                                 {inputMode === 'voice' && (
                                     <div className="absolute bottom-6 right-6">
                                         <Button
@@ -967,8 +1031,8 @@ const InterviewCoach = () => {
                                             variant={isListening ? "destructive" : "default"}
                                             className={cn(
                                                 "relative rounded-full h-14 w-14 shadow-xl transition-all duration-500 border border-slate-100",
-                                                isListening 
-                                                    ? "bg-red-500 hover:bg-red-600 text-white shadow-red-500/30 ring-4 ring-red-500/20" 
+                                                isListening
+                                                    ? "bg-red-500 hover:bg-red-600 text-white shadow-red-500/30 ring-4 ring-red-500/20"
                                                     : "bg-slate-900 hover:bg-slate-800 text-white"
                                             )}
                                             onClick={toggleListening}
@@ -989,8 +1053,8 @@ const InterviewCoach = () => {
                                     {currentAnswer.length} chars
                                 </div>
                                 <div className="flex gap-3">
-                                    <Button 
-                                        variant="ghost" 
+                                    <Button
+                                        variant="ghost"
                                         onClick={handleSkip}
                                         disabled={isSubmitting}
                                         className="text-slate-500 hover:text-slate-900 gap-2 h-11"
@@ -1006,7 +1070,7 @@ const InterviewCoach = () => {
                                             <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                         ) : (
                                             <>
-                                                {isLastQuestion ? 'Complete Interview' : 'Submit & Next'} 
+                                                {isLastQuestion ? 'Complete Interview' : 'Submit & Next'}
                                                 {isLastQuestion ? <CheckCircle2 className="ml-2 h-4 w-4" /> : <ArrowRight className="ml-2 h-4 w-4" />}
                                             </>
                                         )}
@@ -1029,7 +1093,7 @@ const InterviewCoach = () => {
                     <h2 className="text-3xl font-bold tracking-tight text-slate-900 mb-3">Analyzing Session</h2>
                     <p className="text-slate-500 text-base font-medium">Generating your personalized feedback report...</p>
                     <div className="w-72 h-1.5 bg-slate-100 rounded-full mt-10 overflow-hidden">
-                        <div 
+                        <div
                             className="h-full bg-primary transition-all duration-300 ease-out"
                             style={{ width: `${analysisProgress}%` }}
                         />

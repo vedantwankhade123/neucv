@@ -1,7 +1,8 @@
+
 import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, FilePlus, Settings, Home, LogOut, CreditCard, Sparkles, Bot } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { LayoutGrid, FilePlus, Settings, Home, LogOut, CreditCard, Sparkles, Bot, Share2 } from "lucide-react";
+import { NavLink, useNavigate, useLocation, Link } from "react-router-dom";
 import { useState } from "react";
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -24,7 +25,7 @@ const navItems = [
   { to: "/dashboard", icon: LayoutGrid, label: "My Projects", end: true },
   { to: "/dashboard/interview", icon: Bot, label: "Interview Coach" },
   { to: "/templates", icon: FilePlus, label: "Templates" },
-  { to: "/dashboard/pricing", icon: CreditCard, label: "Plans & Pricing" },
+
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
@@ -50,7 +51,7 @@ const SidebarNav = ({ onLinkClick }: { onLinkClick?: () => void }) => {
             >
               {({ isActive }) => (
                 <>
-                  <div 
+                  <div
                     style={{ backgroundColor: isActive ? '#000000' : '#e5e5e5' }}
                     className="absolute inset-0 rounded-lg -z-10"
                   />
@@ -97,31 +98,27 @@ export const AppSidebar = ({ isMobileNavOpen, setIsMobileNavOpen }: AppSidebarPr
       </div>
 
       <div className="flex-shrink-0">
-        <div className="px-2 py-2">
-          <Card className="bg-gradient-to-br from-violet-600 to-indigo-600 border-none shadow-lg text-white overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-2 opacity-10">
-              <Sparkles className="h-16 w-16" />
-            </div>
-            <CardHeader className="p-3 pb-2 relative z-10">
-              <CardTitle className="text-xs font-bold flex items-center gap-2">
-                <Sparkles className="h-3 w-3 text-yellow-300" />
-                All Access
-              </CardTitle>
-              <CardDescription className="text-white/80 text-xs">
-                Unlock every template forever
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-3 pt-2 relative z-10">
-              <Button
-                size="sm"
-                variant="secondary"
-                className="w-full text-xs font-semibold shadow-sm hover:bg-white/90 h-7"
-                onClick={() => navigate('/dashboard/pricing')}
-              >
-                Get Bundle
-              </Button>
-            </CardContent>
-          </Card>
+        <div className="px-2 pb-2">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all duration-300 text-sm h-9 shadow-sm"
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({
+                  title: 'NeuCV - AI Resume Builder',
+                  text: 'Check out this amazing free AI Resume Builder!',
+                  url: window.location.origin
+                }).catch(console.error);
+              } else {
+                navigator.clipboard.writeText(window.location.origin);
+                // Ideally show toast here, but sidebar might not have toast access easily without hook
+                alert("Link copied to clipboard!");
+              }
+            }}
+          >
+            <Share2 className="h-4 w-4" />
+            <span className="font-medium">Share App</span>
+          </Button>
         </div>
 
         <div className="px-2 py-2">

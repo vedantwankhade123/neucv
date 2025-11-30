@@ -22,7 +22,7 @@ export const getUserProfile = async (user: { uid: string; email: string | null; 
             displayName: user.displayName || '',
             photoURL: user.photoURL || '',
             plan: 'free',
-            credits: 5, // Give 5 free credits to start
+            credits: 25, // Give 25 free credits to start
             createdAt: Date.now(),
             lastLogin: Date.now()
         };
@@ -31,8 +31,8 @@ export const getUserProfile = async (user: { uid: string; email: string | null; 
     }
 };
 
-export const deductCredit = async (uid: string): Promise<boolean> => {
-    console.log(`[DEBUG] deductCredit called for uid: ${uid}`);
+export const deductCredits = async (uid: string, amount: number): Promise<boolean> => {
+    console.log(`[DEBUG] deductCredits called for uid: ${uid}, amount: ${amount}`);
     const userRef = doc(db, USERS_COLLECTION, uid);
 
     try {
@@ -43,8 +43,8 @@ export const deductCredit = async (uid: string): Promise<boolean> => {
             }
 
             const userData = userDoc.data() as UserProfile;
-            if (userData.credits > 0) {
-                transaction.update(userRef, { credits: userData.credits - 1 });
+            if (userData.credits >= amount) {
+                transaction.update(userRef, { credits: userData.credits - amount });
             } else {
                 throw new Error("Insufficient credits");
             }
