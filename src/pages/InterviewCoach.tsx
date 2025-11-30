@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { InterviewReport } from '@/components/InterviewReport';
-import { InterviewData, InterviewResponse } from '@/types/interview';
+import { InterviewData, InterviewResponse, InterviewLanguage } from '@/types/interview';
 import { evaluateInterviewResponse, generateInterviewReport } from '@/lib/gemini';
 import { toast } from "sonner";
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,9 @@ const InterviewCoach = () => {
     const animationFrameRef = useRef<number | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    
+    // Voice Refs
+    const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
     
     // Silence detection refs
     const lastAudioTimeRef = useRef<number>(Date.now());
@@ -93,6 +96,54 @@ const InterviewCoach = () => {
         const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
+
+    // --- Voice Selection Logic ---
+    const initVoice = useCallback((targetLanguage: InterviewLanguage) => {
+        if (!window.speechSynthesis) return;
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length === 0) return; // Voices not loaded yet
+
+        let preferredVoice: SpeechSynthesisVoice | undefined;
+
+        // Logic to select the best voice based on language
+        // We prioritize "Microsoft" or "Google" voices as they usually sound better
+        
+        if (targetLanguage === 'hindi') {
+            // Try to find a Hindi voice
+            preferredVoice = voices.find(v => v.lang === 'hi-IN' && (v.name.includes("Google") || v.name.includes("Microsoft")));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'hi-IN');
+        } 
+        else if (targetLanguage === 'marathi') {
+            // Try to find a Marathi voice
+            preferredVoice = voices.find(v => v.lang === 'mr-IN' && (v.name.includes("Google") || v.name.includes("Microsoft")));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'mr-IN');
+            // Fallback to Hindi if Marathi not found, as accents are closer than English
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'hi-IN');
+        } 
+        else if (targetLanguage === 'hinglish') {
+            // For Hinglish, English (India) is often the best compromise for Roman script
+            preferredVoice = voices.find(v => v.lang === 'en-IN' && (v.name.includes("Microsoft") || v.name.includes("Google")));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'en-IN');
+        } 
+        else {
+            // English (Default) - Prioritize Natural/Online voices
+            preferredVoice = voices.find(v => v.name.includes("Microsoft") && v.name.includes("Online") && v.name.includes("Natural"));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.name.includes("Google US English"));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.name.includes("Natural") && v.lang.startsWith("en"));
+            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'en-US');
+        }
+
+        // Ultimate fallback
+        if (!preferredVoice && voices.length > 0) {
+            preferredVoice = voices[0];
+        }
+
+        if (preferredVoice) {
+            console.log(`Selected Voice for ${targetLanguage}:`, preferredVoice.name, preferredVoice.lang);
+            selectedVoiceRef.current = preferredVoice;
+        }
+    }, []);
 
     // --- High-Fidelity Visualizer & Silence Detection ---
     const drawVisualizer = useCallback(() => {
@@ -300,6 +351,17 @@ const InterviewCoach = () => {
             setIsTTSEnabled(settings.interviewTTS);
             
             silenceDurationRef.current = data.setupData.silenceDuration || 5000;
+
+            // Initialize voice based on language
+            if (window.speechSynthesis) {
+                // Initialize immediately if voices are ready
+                initVoice(data.setupData.language);
+                
+                // Add listener for when voices are loaded/changed
+                window.speechSynthesis.onvoiceschanged = () => {
+                    initVoice(data.setupData.language);
+                };
+            }
         } else {
             navigate('/dashboard/interview');
         }
@@ -309,8 +371,9 @@ const InterviewCoach = () => {
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             if (recognitionRef.current) recognitionRef.current.stop();
+            if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
         };
-    }, [location.state, navigate, stopAudioAnalysis, stopTTS]);
+    }, [location.state, navigate, stopAudioAnalysis, stopTTS, initVoice]);
 
     const handleSettingChange = (key: string, value: boolean) => {
         if (key === 'tts') {
@@ -371,42 +434,19 @@ const InterviewCoach = () => {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         
-        // --- IMPROVED VOICE SELECTION LOGIC ---
-        // Priorities:
-        // 1. "Microsoft ... Online (Natural)" - Edge's Server-Side Neural voices (Best Free)
-        // 2. "Google US English" - Chrome's standard voice (Decent)
-        // 3. "Samantha" - Mac standard (Okay)
-        // 4. Any voice containing "Natural" or "Neural"
-        
-        const voices = window.speechSynthesis.getVoices();
-        
-        let preferredVoice = voices.find(v => v.name.includes("Microsoft") && v.name.includes("Online") && v.name.includes("Natural"));
-        
-        if (!preferredVoice) {
-            preferredVoice = voices.find(v => v.name.includes("Natural") && v.lang.startsWith("en"));
-        }
-        
-        if (!preferredVoice) {
-            preferredVoice = voices.find(v => v.name === "Google US English");
-        }
-        
-        if (!preferredVoice) {
-            preferredVoice = voices.find(v => v.name === "Samantha");
-        }
-        
-        // Fallback to any English voice
-        if (!preferredVoice) {
-            preferredVoice = voices.find(v => v.lang.startsWith("en"));
-        }
-        
-        if (preferredVoice) {
-            utterance.voice = preferredVoice;
-            // Console log to debug which voice is being used
-            console.log("Using voice:", preferredVoice.name);
+        // Use the pre-selected voice
+        if (selectedVoiceRef.current) {
+            utterance.voice = selectedVoiceRef.current;
+            // Ensure lang matches the voice to aid pronunciation
+            utterance.lang = selectedVoiceRef.current.lang;
+        } else {
+            // Fallback just in case initVoice hasn't run or found nothing
+            // This is unlikely if initVoice is correct, but safe
+            console.warn("No specific voice selected, using default.");
         }
 
         // Tweak pitch and rate slightly for a less robotic feel
-        utterance.rate = 1.05; // Slightly faster helps flow
+        utterance.rate = 1.05; 
         utterance.pitch = 1.0; 
 
         utterance.onstart = () => setIsAiSpeaking(true);
@@ -448,7 +488,17 @@ const InterviewCoach = () => {
                 const recognition = new SpeechRecognition();
                 recognition.continuous = true;
                 recognition.interimResults = true;
-                recognition.lang = 'en-US';
+                
+                // Set language for recognition based on selected language
+                // English, Hinglish -> en-IN or en-US
+                // Hindi -> hi-IN
+                // Marathi -> mr-IN
+                
+                const lang = interviewData?.setupData.language;
+                if (lang === 'hindi') recognition.lang = 'hi-IN';
+                else if (lang === 'marathi') recognition.lang = 'mr-IN';
+                else if (lang === 'hinglish') recognition.lang = 'en-IN'; // en-IN handles mixed english/hindi better
+                else recognition.lang = 'en-US';
 
                 recognition.onstart = () => {
                     setIsListening(true);
@@ -482,7 +532,7 @@ const InterviewCoach = () => {
                 recognitionRef.current = recognition;
             }
         }
-    }, [phase]);
+    }, [phase, interviewData?.setupData.language]);
 
     const currentQuestion = interviewData?.questions[currentQuestionIndex];
     const currentQuestionId = currentQuestion?.id;
