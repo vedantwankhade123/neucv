@@ -72,6 +72,7 @@ const InterviewCoach = () => {
     const [isAiSpeaking, setIsAiSpeaking] = useState(false);
     const [audioLevel, setAudioLevel] = useState(0);
     const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
+    const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false);
 
     // Interview flow
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -298,7 +299,6 @@ const InterviewCoach = () => {
             const settings = getAutoSaveSettings();
             setIsTTSEnabled(settings.interviewTTS);
             
-            // Explicitly use silence duration from setup data, falling back to 5000 if missing
             silenceDurationRef.current = data.setupData.silenceDuration || 5000;
         } else {
             navigate('/dashboard/interview');
@@ -677,6 +677,17 @@ const InterviewCoach = () => {
         navigate('/dashboard');
     };
 
+    const handleFinishClick = () => {
+        setIsFinishDialogOpen(true);
+    };
+
+    const confirmFinish = () => {
+        setIsFinishDialogOpen(false);
+        if (interviewData) {
+            completeInterview(interviewData);
+        }
+    };
+
     useEffect(() => {
         if (phase === 'interview' && interviewData) {
             timerIntervalRef.current = window.setInterval(() => {
@@ -789,7 +800,7 @@ const InterviewCoach = () => {
                     <Button 
                         variant="destructive" 
                         size="sm" 
-                        onClick={() => completeInterview(interviewData!)} 
+                        onClick={handleFinishClick}
                         className="h-9 px-3 sm:px-4 text-xs gap-2 shadow-sm hover:shadow transition-all"
                     >
                         <Square className="h-3 w-3 fill-current" /> 
@@ -1038,6 +1049,23 @@ const InterviewCoach = () => {
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmExit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                             End Session
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Finish Interview?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to finish the interview now? We will generate a report based on your answers so far.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmFinish} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                            Finish & Generate Report
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
