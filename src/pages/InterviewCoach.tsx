@@ -90,7 +90,7 @@ const InterviewCoach = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // --- High-Fidelity Spectral Ring Visualizer (Unified for AI & User) ---
+    // --- High-Fidelity Visualizer ---
     const drawVisualizer = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -153,93 +153,138 @@ const InterviewCoach = () => {
             }
         }
 
-        // Scale effect
-        const scale = 1 + (volume / 255) * 0.08;
-
         ctx.save();
         ctx.translate(centerX, centerY);
-        ctx.scale(scale, scale);
-        
-        const time = Date.now() / 1000;
-        ctx.rotate(time * 0.05);
 
-        ctx.globalCompositeOperation = 'screen'; 
+        if (mode === 'user') {
+            // --- User Visualizer: Circular Frequency Bars ---
+            // A distinct style for user input (Voice Assistant style)
+            const barCount = 64; 
+            const angleStep = (Math.PI * 2) / barCount;
+            const t = Date.now() / 1000;
+            
+            // Pulse the radius slightly with volume
+            const userRadius = baseRadius * 0.9 + (volume / 255) * 10;
 
-        // Draw Filaments
-        const particles = 720;
-        const angleStep = (Math.PI * 2) / particles;
+            for (let i = 0; i < barCount; i++) {
+                // Map bar index to frequency data (mirroring for symmetry)
+                // We use the first 64 bins of the 128 available
+                let freqIndex = i < barCount / 2 ? i : barCount - 1 - i;
+                // Scale index to fit data array length roughly
+                freqIndex = Math.floor(freqIndex * (128 / (barCount / 2)));
+                
+                const value = frequencyData[freqIndex] || 0;
+                
+                // Calculate bar height
+                const barHeight = 10 + (value / 255) * 100;
+                
+                const angle = i * angleStep - (Math.PI / 2); // Start from top
+                
+                const x = Math.cos(angle) * userRadius;
+                const y = Math.sin(angle) * userRadius;
+                const xEnd = Math.cos(angle) * (userRadius + barHeight);
+                const yEnd = Math.sin(angle) * (userRadius + barHeight);
 
-        for (let i = 0; i < particles; i++) {
-            const angle = i * angleStep;
+                // Dynamic coloring for user voice (Warm colors)
+                // Purple to Pink/Orange gradient based on intensity
+                const hue = 280 + (value / 255) * 60; // 280 (Purple) -> 340 (Pink)
+                const lightness = 60 + (value / 255) * 20;
+                
+                ctx.strokeStyle = `hsl(${hue}, 100%, ${lightness}%)`;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(xEnd, yEnd);
+                ctx.stroke();
+            }
             
-            const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
-            const freqValue = frequencyData[freqIndex] || 0;
+            // Inner glow for user
+            ctx.beginPath();
+            ctx.arc(0, 0, userRadius - 5, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(180, 50, 255, ${0.1 + (volume / 255) * 0.2})`;
+            ctx.fill();
+
+        } else {
+            // --- AI & Idle Visualizer: Filament Ring (Existing) ---
             
-            // --- Color Logic ---
-            const normAngle = (angle / (Math.PI * 2)); 
-            const shiftedAngle = (normAngle + 0.2) % 1.0; 
+            // Scale effect
+            const scale = 1 + (volume / 255) * 0.08;
+            ctx.scale(scale, scale);
             
-            let hue;
-            let saturation = 100;
-            
-            if (mode === 'user') {
-                // User Theme: Colorful / Warm Gradient (Purple -> Orange -> Pink)
-                // Cycle through vibrant hues
-                hue = (shiftedAngle * 360 + time * 50) % 360; 
-                saturation = 90;
-            } else if (mode === 'ai') {
-                // AI Theme: Cool Blue Gradient (Cyan -> Deep Blue)
-                // Constrain hue to blue-ish range (180 - 240)
-                hue = 190 + (Math.sin(angle + time) * 30); 
-            } else {
-                // Idle Theme: Subtle Gray-Blue
-                hue = 210;
-                saturation = 20;
+            const time = Date.now() / 1000;
+            ctx.rotate(time * 0.05);
+
+            ctx.globalCompositeOperation = 'screen'; 
+
+            // Draw Filaments
+            const particles = 720;
+            const angleStep = (Math.PI * 2) / particles;
+
+            for (let i = 0; i < particles; i++) {
+                const angle = i * angleStep;
+                
+                const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
+                const freqValue = frequencyData[freqIndex] || 0;
+                
+                // Color Logic
+                const normAngle = (angle / (Math.PI * 2)); 
+                const shiftedAngle = (normAngle + 0.2) % 1.0; 
+                
+                let hue;
+                let saturation = 100;
+                
+                if (mode === 'ai') {
+                    // AI Theme: Cool Blue Gradient (Cyan -> Deep Blue)
+                    hue = 190 + (Math.sin(angle + time) * 30); 
+                } else {
+                    // Idle Theme: Subtle Gray-Blue
+                    hue = 210;
+                    saturation = 20;
+                }
+
+                const lightness = 50 + (freqValue / 255) * 40; 
+                const alpha = 0.2 + (freqValue / 255) * 0.8;
+
+                ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+                ctx.lineWidth = 1.5;
+
+                const rStart = baseRadius;
+                const rEnd = baseRadius + 15 + (freqValue / 255) * 80; 
+                const swirl = 0.15 + (freqValue / 255) * 0.15; 
+                
+                const x1 = Math.cos(angle) * rStart;
+                const y1 = Math.sin(angle) * rStart;
+                const x2 = Math.cos(angle + swirl) * rEnd;
+                const y2 = Math.sin(angle + swirl) * rEnd;
+
+                const cpX = Math.cos(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
+                const cpY = Math.sin(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+                ctx.stroke();
             }
 
-            const lightness = 50 + (freqValue / 255) * 40; 
-            const alpha = 0.2 + (freqValue / 255) * 0.8;
-
-            ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-            ctx.lineWidth = 1.5;
-
-            const rStart = baseRadius;
-            const rEnd = baseRadius + 15 + (freqValue / 255) * 80; 
-            const swirl = 0.15 + (freqValue / 255) * 0.15; 
-            
-            const x1 = Math.cos(angle) * rStart;
-            const y1 = Math.sin(angle) * rStart;
-            const x2 = Math.cos(angle + swirl) * rEnd;
-            const y2 = Math.sin(angle + swirl) * rEnd;
-
-            const cpX = Math.cos(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
-            const cpY = Math.sin(angle + swirl * 0.5) * (rStart + (rEnd - rStart) * 0.5);
-
+            // Inner rim light
             ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+            ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
+            ctx.lineWidth = 2;
+            const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
+            
+            if (mode === 'ai') {
+                 rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)'); // Cyan
+                 rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)'); // Blue
+            } else {
+                 rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)'); 
+                 rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
+            }
+
+            ctx.strokeStyle = rimGradient;
             ctx.stroke();
         }
-
-        // Inner rim light
-        ctx.beginPath();
-        ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
-        ctx.lineWidth = 2;
-        const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
-        
-        if (mode === 'user') {
-             rimGradient.addColorStop(0, 'rgba(255, 100, 100, 0.8)'); // Redish
-             rimGradient.addColorStop(1, 'rgba(200, 100, 255, 0.8)'); // Purple
-        } else if (mode === 'ai') {
-             rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)'); // Cyan
-             rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)'); // Blue
-        } else {
-             rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)'); 
-             rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
-        }
-
-        ctx.strokeStyle = rimGradient;
-        ctx.stroke();
 
         ctx.restore();
 
@@ -393,12 +438,6 @@ const InterviewCoach = () => {
                 stopTTS();
                 recognitionRef.current.start();
                 setIsListening(true);
-                
-                // Removed silence timeout auto-submit
-                // if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                // silenceTimerRef.current = setTimeout(() => {
-                //     stopListeningRef.current?.();
-                // }, 5000);
             }
         } catch (e) {
             console.log("Mic already active");
@@ -434,13 +473,6 @@ const InterviewCoach = () => {
                     if (finalTranscript) {
                         setCurrentAnswer(prev => prev + finalTranscript);
                     }
-
-                    // Removed auto-stop on silence
-                    // if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                    // silenceTimerRef.current = setTimeout(() => {
-                    //     stopListeningRef.current?.();
-                    //     toast.info("Microphone stopped", { description: "Silence detected." });
-                    // }, 2500);
                 };
 
                 recognition.onerror = (event: any) => {
@@ -450,11 +482,6 @@ const InterviewCoach = () => {
                 };
 
                 recognition.onend = () => {
-                    // Automatically restart listening if we're supposed to be listening (and not stopped manually)
-                    // This creates a "continuous" listening experience until the user toggles it off
-                    // But we rely on isListening state. If it was true, we try to start again.
-                    // However, we need to be careful not to create a loop if there's an error.
-                    // For now, we'll let it stop and the user has to restart, or we handle it in toggle.
                     setIsListening(false);
                 };
 
@@ -493,9 +520,6 @@ const InterviewCoach = () => {
                 speakText(questionText, () => {
                     setTimeout(() => {
                         // Removed auto-start listening
-                        // if (inputModeRef.current === 'voice') {
-                        //     startListeningRef.current?.();
-                        // }
                     }, 500);
                 });
             }
@@ -879,7 +903,7 @@ const InterviewCoach = () => {
                             
                             <div className="p-8 flex flex-col h-full relative z-10">
                                 {/* Header Row: Number & Badges */}
-                                <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center justify-between mb-6 flex-shrink-0">
                                     <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">
                                         Question {currentQuestionIndex + 1} <span className="text-slate-300 font-normal">/ {interviewData?.questions.length}</span>
                                     </span>
@@ -898,14 +922,14 @@ const InterviewCoach = () => {
                                     </div>
                                 </div>
 
-                                {/* Question Text Area */}
-                                <div className="flex-grow flex flex-col justify-center relative">
-                                    {/* Quote Icon Watermark */}
-                                    <div className="absolute -top-4 -left-2 text-slate-100 text-8xl font-serif leading-none select-none pointer-events-none transform -translate-y-4">
-                                        <Quote className="h-20 w-20 text-slate-50 fill-current opacity-50" />
-                                    </div>
-                                    
-                                    <div className="flex-grow overflow-y-auto hide-scrollbar z-10">
+                                {/* Question Text Area - Scrollable Fix */}
+                                <div className="flex-grow relative min-h-0">
+                                    <div className="absolute inset-0 overflow-y-auto pr-2 custom-scrollbar">
+                                        {/* Quote Icon Watermark - Fixed position relative to content */}
+                                        <div className="absolute -top-2 -left-2 text-slate-100 text-8xl font-serif leading-none select-none pointer-events-none transform -translate-y-4 -z-10">
+                                            <Quote className="h-20 w-20 text-slate-50 fill-current opacity-50" />
+                                        </div>
+                                        
                                         <h2 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug tracking-tight relative z-10">
                                             {displayedQuestion}
                                             {isTyping && (
