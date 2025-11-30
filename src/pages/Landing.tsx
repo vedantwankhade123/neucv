@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import ThreeDMarqueeDemo from '@/components/3d-marquee-demo';
-import { LayoutTemplate, Palette, FileText, Download, Github, Mail, Linkedin, Globe, Users, Star } from 'lucide-react';
+import { LayoutTemplate, Palette, FileText, Download, Github, Mail, Linkedin, Globe, Users, Star, MessageCircle, Mic, BrainCircuit, BarChart3 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/Logo';
@@ -19,6 +19,7 @@ const Landing = () => {
   const [loading, setLoading] = useState(true);
   const [activeLink, setActiveLink] = useState('home');
   const featuresRef = useRef<HTMLElement>(null);
+  const interviewRef = useRef<HTMLElement>(null);
   const templatesRef = useRef<HTMLElement>(null);
   const connectRef = useRef<HTMLElement>(null);
 
@@ -46,9 +47,10 @@ const Landing = () => {
   const handleScroll = () => {
     if (!containerRef.current) return;
 
-    const scrollPosition = containerRef.current.scrollTop + 100; // Add offset for better trigger point
+    const scrollPosition = containerRef.current.scrollTop + 100;
 
     const featuresTop = featuresRef.current?.offsetTop ?? Infinity;
+    const interviewTop = interviewRef.current?.offsetTop ?? Infinity;
     const templatesTop = templatesRef.current?.offsetTop ?? Infinity;
     const connectTop = connectRef.current?.offsetTop ?? Infinity;
 
@@ -56,6 +58,8 @@ const Landing = () => {
       setActiveLink('connect');
     } else if (scrollPosition >= templatesTop) {
       setActiveLink('templates');
+    } else if (scrollPosition >= interviewTop) {
+      setActiveLink('interview');
     } else if (scrollPosition >= featuresTop) {
       setActiveLink('features');
     } else {
@@ -96,6 +100,7 @@ const Landing = () => {
               <div className="flex items-center gap-4 text-sm">
                 <a href="#" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'home' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Home</a>
                 <a href="#features" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'features' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Features</a>
+                <a href="#interview" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'interview' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Interview</a>
                 <a href="#templates" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'templates' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Templates</a>
                 <Link to="/pricing" className="font-medium transition-colors px-3 py-1.5 rounded-full text-foreground hover:text-foreground/80">Pricing</Link>
                 <a href="#connect" className={cn("font-medium transition-colors px-3 py-1.5 rounded-full", activeLink === 'connect' ? 'bg-black text-white shadow-md' : 'text-foreground hover:text-foreground/80')}>Connect</a>
@@ -200,6 +205,164 @@ const Landing = () => {
                 <h3 className="text-xl font-semibold mb-2 text-slate-50">PDF Download</h3>
                 <p className="text-slate-400">Download a print-ready PDF of your resume, perfect for job applications.</p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Interview Coach Section */}
+        <section id="interview" ref={interviewRef} className="py-24 bg-slate-50 relative overflow-hidden">
+          {/* Background Decorative Blobs */}
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-purple-100 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-100 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+              
+              {/* Left Content */}
+              <div className="lg:w-1/2 text-left space-y-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold tracking-wide uppercase">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  New Feature
+                </div>
+                
+                <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 leading-tight">
+                  Master Your Interview <br/>
+                  <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Before It Happens</span>
+                </h2>
+                
+                <p className="text-lg text-slate-600 leading-relaxed max-w-lg">
+                  Practice with our AI-powered Interview Coach. Get real-time feedback on your answers, tone, and confidence tailored specifically to your resume.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-purple-600">
+                      <BrainCircuit className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">AI-Generated Questions</h4>
+                      <p className="text-sm text-slate-500">Tailored to your specific job role.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-blue-600">
+                      <Mic className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">Voice Interaction</h4>
+                      <p className="text-sm text-slate-500">Speak naturally like a real interview.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-green-600">
+                      <BarChart3 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">Instant Feedback</h4>
+                      <p className="text-sm text-slate-500">Detailed performance analysis report.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-amber-600">
+                      <Globe className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-900">Multi-Language</h4>
+                      <p className="text-sm text-slate-500">Practice in English, Hindi, and more.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <Button size="lg" className="bg-slate-900 text-white hover:bg-slate-800 shadow-lg group" asChild>
+                    <Link to="/dashboard/interview">
+                      Try Interview Coach <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right Visual */}
+              <div className="lg:w-1/2 relative">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-slate-200 bg-white">
+                  {/* Mock UI for Interview Coach */}
+                  <div className="bg-slate-50 border-b p-3 flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                      <div className="w-3 h-3 rounded-full bg-amber-400"></div>
+                      <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                    </div>
+                    <div className="ml-4 bg-white px-3 py-1 rounded-md text-xs text-slate-400 font-medium w-full max-w-[200px]">neucv.com/interview</div>
+                  </div>
+                  
+                  <div className="p-6 md:p-8 bg-gradient-to-br from-slate-50 to-white">
+                    <div className="flex flex-col gap-6">
+                      {/* AI Question Bubble */}
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                          <MessageCircle className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-slate-100 max-w-[90%]">
+                          <p className="text-sm font-medium text-slate-800">Can you describe a challenging project you worked on?</p>
+                        </div>
+                      </div>
+
+                      {/* User Waveform Visual */}
+                      <div className="flex gap-4 flex-row-reverse">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <Mic className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="bg-blue-600 p-4 rounded-2xl rounded-tr-none shadow-md text-white max-w-[90%] flex items-center gap-3">
+                          <div className="flex items-center gap-1 h-4">
+                            {[...Array(12)].map((_, i) => (
+                              <div 
+                                key={i} 
+                                className="w-1 bg-white/80 rounded-full animate-pulse"
+                                style={{ 
+                                  height: `${Math.random() * 100}%`,
+                                  animationDelay: `${i * 0.1}s` 
+                                }}
+                              ></div>
+                            ))}
+                          </div>
+                          <span className="text-xs font-medium opacity-90">Recording answer...</span>
+                        </div>
+                      </div>
+
+                      {/* Analysis Card */}
+                      <div className="mt-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300 fill-mode-backwards">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-amber-500" /> Live Feedback
+                          </h5>
+                          <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Strong Answer</span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 w-[85%] rounded-full"></div>
+                          </div>
+                          <p className="text-xs text-slate-500">Great use of the STAR method. Your explanation of the outcome was very clear.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Floating Badge */}
+                <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-xl border border-slate-100 flex items-center gap-3 animate-bounce duration-[3000ms]">
+                  <div className="bg-green-100 p-2 rounded-full">
+                    <Star className="h-5 w-5 text-green-600 fill-current" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Average Score Increase</p>
+                    <p className="text-lg font-bold text-slate-900">+40%</p>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
@@ -325,6 +488,7 @@ const Landing = () => {
               <nav className="mt-4 space-y-2">
                 <a href="#" className="block text-muted-foreground hover:text-foreground">Home</a>
                 <a href="#features" className="block text-muted-foreground hover:text-foreground">Features</a>
+                <a href="#interview" className="block text-muted-foreground hover:text-foreground">Interview Coach</a>
                 <a href="#templates" className="block text-muted-foreground hover:text-foreground">Templates</a>
               </nav>
             </div>
