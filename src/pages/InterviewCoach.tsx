@@ -158,7 +158,6 @@ const InterviewCoach = () => {
 
         if (mode === 'user') {
             // --- User Visualizer: Circular Frequency Bars ---
-            // A distinct style for user input (Voice Assistant style)
             const barCount = 64; 
             const angleStep = (Math.PI * 2) / barCount;
             const t = Date.now() / 1000;
@@ -186,7 +185,6 @@ const InterviewCoach = () => {
                 const yEnd = Math.sin(angle) * (userRadius + barHeight);
 
                 // Dynamic coloring for user voice (Warm colors)
-                // Purple to Pink/Orange gradient based on intensity
                 const hue = 280 + (value / 255) * 60; // 280 (Purple) -> 340 (Pink)
                 const lightness = 60 + (value / 255) * 20;
                 
@@ -207,7 +205,7 @@ const InterviewCoach = () => {
             ctx.fill();
 
         } else {
-            // --- AI & Idle Visualizer: Filament Ring (Existing) ---
+            // --- AI & Idle Visualizer: Filament Ring ---
             
             // Scale effect
             const scale = 1 + (volume / 255) * 0.08;
@@ -519,7 +517,9 @@ const InterviewCoach = () => {
                 setIsTyping(false);
                 speakText(questionText, () => {
                     setTimeout(() => {
-                        // Removed auto-start listening
+                        if (inputModeRef.current === 'voice') {
+                            startListeningRef.current?.();
+                        }
                     }, 500);
                 });
             }
