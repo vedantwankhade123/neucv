@@ -14,11 +14,12 @@ import {
 import { deleteAllResumes, getResumes } from '@/lib/resume-storage';
 import { showError, showSuccess } from '@/utils/toast';
 import { UserNav } from '@/components/UserNav';
-import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, Globe } from 'lucide-react';
+import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, Globe, Timer } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AutoSaveToggle } from '../components/AutoSaveToggle';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import {
     Select,
     SelectContent,
@@ -40,14 +41,16 @@ const Settings = () => {
   // Settings state
   const [interviewSettings, setInterviewSettings] = useState({
     interviewTTS: true,
-    defaultLanguage: 'english'
+    defaultLanguage: 'english',
+    silenceDuration: 5000
   });
 
   useEffect(() => {
     const settings = getAutoSaveSettings();
     setInterviewSettings({
         interviewTTS: settings.interviewTTS,
-        defaultLanguage: settings.defaultLanguage || 'english'
+        defaultLanguage: settings.defaultLanguage || 'english',
+        silenceDuration: settings.silenceDuration || 5000
     });
   }, []);
 
@@ -218,6 +221,31 @@ const Settings = () => {
                         checked={interviewSettings.interviewTTS}
                         onCheckedChange={(checked) => handleInterviewSettingChange('interviewTTS', checked)}
                     />
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-md">
+                            <Timer className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="space-y-0.5 w-full">
+                            <Label htmlFor="silence-duration" className="text-base font-medium">
+                                Auto-Stop Microphone (Silence)
+                            </Label>
+                            <p className="text-sm text-muted-foreground mb-3">
+                                Stop recording after detecting silence for: <strong>{interviewSettings.silenceDuration / 1000}s</strong>
+                            </p>
+                            <Slider
+                                id="silence-duration"
+                                min={2000}
+                                max={10000}
+                                step={500}
+                                value={[interviewSettings.silenceDuration]}
+                                onValueChange={(val) => handleInterviewSettingChange('silenceDuration', val[0])}
+                                className="w-full max-w-xs"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">

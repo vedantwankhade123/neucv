@@ -43,7 +43,6 @@ const InterviewCoach = () => {
     // Refs
     const timerIntervalRef = useRef<number | null>(null);
     const recognitionRef = useRef<any>(null);
-    const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -51,6 +50,10 @@ const InterviewCoach = () => {
     const animationFrameRef = useRef<number | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    
+    // Silence detection refs
+    const lastAudioTimeRef = useRef<number>(Date.now());
+    const silenceDurationRef = useRef<number>(5000);
     
     // Function refs
     const startListeningRef = useRef<() => void>(null);
@@ -90,7 +93,7 @@ const InterviewCoach = () => {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // --- High-Fidelity Visualizer ---
+    // --- High-Fidelity Visualizer & Silence Detection ---
     const drawVisualizer = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -125,6 +128,29 @@ const InterviewCoach = () => {
                 sum += frequencyData[i];
             }
             volume = sum / 128;
+
+            // --- Silence Detection Logic ---
+            // Threshold is rough, usually noise is < 5-10
+            const silenceThreshold = 15; 
+            
+            if (volume > silenceThreshold) {
+                // User is speaking, reset timer
+                lastAudioTimeRef.current = Date.now();
+            } else {
+                // Silence detected
+                const timeSinceLastAudio = Date.now() - lastAudioTimeRef.current;
+                
+                // Only stop if silence exceeds configured duration AND we have captured some answer
+                if (timeSinceLastAudio > silenceDurationRef.current) {
+                    console.log(`Silence detected for ${timeSinceLastAudio}ms. Stopping mic.`);
+                    // Use setTimeout to break the animation loop context safely
+                    setTimeout(() => {
+                        stopListeningRef.current?.();
+                        toast("Microphone paused", { description: "Silence detected." });
+                    }, 0);
+                }
+            }
+
         } else if (isAiSpeaking) {
             // AI Speaking (Simulation)
             mode = 'ai';
@@ -315,9 +341,7 @@ const InterviewCoach = () => {
         if (recognitionRef.current) {
             recognitionRef.current.stop();
         }
-        if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-        }
+        // Don't need to clear silence timer explicitly as it's logic-based now
         setIsListening(false);
         stopAudioAnalysis();
     }, [stopAudioAnalysis]);
@@ -333,6 +357,9 @@ const InterviewCoach = () => {
             setQuestionStartTime(Date.now());
             const settings = getAutoSaveSettings();
             setIsTTSEnabled(settings.interviewTTS);
+            
+            // Set silence duration from settings (default 5000ms if not set)
+            silenceDurationRef.current = settings.silenceDuration || 5000;
         } else {
             navigate('/dashboard/interview');
         }
@@ -341,7 +368,6 @@ const InterviewCoach = () => {
             stopTTS();
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
             if (recognitionRef.current) recognitionRef.current.stop();
         };
     }, [location.state, navigate, stopAudioAnalysis, stopTTS]);
@@ -373,6 +399,9 @@ const InterviewCoach = () => {
             
             const bufferLength = analyserRef.current.frequencyBinCount;
             dataArrayRef.current = new Uint8Array(bufferLength);
+
+            // Reset silence timestamp on start
+            lastAudioTimeRef.current = Date.now();
 
             const updateVolume = () => {
                 if (!analyserRef.current || !dataArrayRef.current) return;
@@ -470,6 +499,8 @@ const InterviewCoach = () => {
 
                     if (finalTranscript) {
                         setCurrentAnswer(prev => prev + finalTranscript);
+                        // Reset silence timer on speech recognition result as well
+                        lastAudioTimeRef.current = Date.now();
                     }
                 };
 

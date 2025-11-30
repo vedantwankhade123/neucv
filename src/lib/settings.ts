@@ -4,6 +4,7 @@ export interface AutoSaveSettings {
     resumeAutoSave: boolean;
     interviewTTS: boolean;        // Read questions aloud (Text-to-Speech)
     defaultLanguage: string;      // Default interview language
+    silenceDuration: number;      // Silence duration in ms before stopping mic
 }
 
 const SETTINGS_KEY = 'appSettings'; 
@@ -12,6 +13,7 @@ const defaultSettings: AutoSaveSettings = {
     resumeAutoSave: true,
     interviewTTS: true,
     defaultLanguage: 'english',
+    silenceDuration: 5000, // Default 5 seconds
 };
 
 export const getAutoSaveSettings = (): AutoSaveSettings => {
