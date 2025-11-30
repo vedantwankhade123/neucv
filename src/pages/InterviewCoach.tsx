@@ -43,7 +43,6 @@ const InterviewCoach = () => {
     // Refs
     const timerIntervalRef = useRef<number | null>(null);
     const recognitionRef = useRef<any>(null);
-    const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -177,7 +176,6 @@ const InterviewCoach = () => {
 
         // --- Unified Filament Ring Visualizer ---
         
-        // Scale effect
         const scale = 1 + (volume / 255) * 0.08;
         ctx.scale(scale, scale);
         
@@ -186,7 +184,6 @@ const InterviewCoach = () => {
 
         ctx.globalCompositeOperation = 'screen'; 
 
-        // Draw Filaments
         const particles = 720;
         const angleStep = (Math.PI * 2) / particles;
 
@@ -196,25 +193,21 @@ const InterviewCoach = () => {
             const freqIndex = Math.floor((Math.abs(Math.sin(angle * 2 + time * 0.2)) * 60)) % 60;
             const freqValue = frequencyData[freqIndex] || 0;
             
-            // Color Logic
             let hue;
             let saturation = 100;
             let lightness = 50 + (freqValue / 255) * 40; 
             let alpha = 0.2 + (freqValue / 255) * 0.8;
             
             if (mode === 'user') {
-                // User Theme: Colorful / Rainbow
                 hue = (i * 0.5 + time * 60 + freqValue * 0.5) % 360; 
                 saturation = 90;
                 lightness = 60 + (freqValue / 255) * 30;
             } else if (mode === 'ai') {
-                // AI Theme: Cool Blue Gradient (Cyan -> Deep Blue)
                 hue = 190 + (Math.sin(angle + time) * 30); 
             } else {
-                // Idle Theme: Subtle Gray-Blue
                 hue = 210;
                 saturation = 20;
-                alpha = 0.1 + (freqValue / 255) * 0.5; // Fainter idle state
+                alpha = 0.1 + (freqValue / 255) * 0.5; 
             }
 
             ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
@@ -238,19 +231,18 @@ const InterviewCoach = () => {
             ctx.stroke();
         }
 
-        // Inner rim light
         ctx.beginPath();
         ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
         ctx.lineWidth = 2;
         const rimGradient = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
         
         if (mode === 'user') {
-             rimGradient.addColorStop(0, 'rgba(255, 50, 150, 0.8)'); // Pink
-             rimGradient.addColorStop(0.5, 'rgba(255, 200, 50, 0.8)'); // Gold
-             rimGradient.addColorStop(1, 'rgba(50, 100, 255, 0.8)'); // Blue
+             rimGradient.addColorStop(0, 'rgba(255, 50, 150, 0.8)');
+             rimGradient.addColorStop(0.5, 'rgba(255, 200, 50, 0.8)');
+             rimGradient.addColorStop(1, 'rgba(50, 100, 255, 0.8)');
         } else if (mode === 'ai') {
-             rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)'); // Cyan
-             rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)'); // Blue
+             rimGradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)');
+             rimGradient.addColorStop(1, 'rgba(0, 100, 255, 0.8)');
         } else {
              rimGradient.addColorStop(0, 'rgba(100, 100, 100, 0.3)'); 
              rimGradient.addColorStop(1, 'rgba(150, 150, 150, 0.3)');
@@ -290,7 +282,6 @@ const InterviewCoach = () => {
         if (recognitionRef.current) {
             recognitionRef.current.stop();
         }
-        // Don't need to clear silence timer explicitly as it's logic-based now
         setIsListening(false);
         stopAudioAnalysis();
     }, [stopAudioAnalysis]);
@@ -307,7 +298,6 @@ const InterviewCoach = () => {
             const settings = getAutoSaveSettings();
             setIsTTSEnabled(settings.interviewTTS);
             
-            // Set silence duration from settings (default 5000ms if not set)
             silenceDurationRef.current = settings.silenceDuration || 5000;
         } else {
             navigate('/dashboard/interview');
@@ -349,7 +339,6 @@ const InterviewCoach = () => {
             const bufferLength = analyserRef.current.frequencyBinCount;
             dataArrayRef.current = new Uint8Array(bufferLength);
 
-            // Reset silence timestamp on start
             lastAudioTimeRef.current = Date.now();
 
             const updateVolume = () => {
@@ -448,7 +437,6 @@ const InterviewCoach = () => {
 
                     if (finalTranscript) {
                         setCurrentAnswer(prev => prev + finalTranscript);
-                        // Reset silence timer on speech recognition result as well
                         lastAudioTimeRef.current = Date.now();
                     }
                 };
@@ -487,24 +475,29 @@ const InterviewCoach = () => {
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
+        // Start speaking immediately (Concurrent with typing)
+        speakText(questionText, () => {
+            // Mic auto-start after speech finishes
+            setTimeout(() => {
+                if (inputModeRef.current === 'voice') {
+                    startListeningRef.current?.();
+                }
+            }, 500);
+        });
+
         let i = 0;
         const typeChar = () => {
             if (i < questionText.length) {
                 setDisplayedQuestion(questionText.substring(0, i + 1));
                 i++;
-                typingTimeoutRef.current = setTimeout(typeChar, 20);
+                // 50ms per char roughly matches normal speech pace
+                typingTimeoutRef.current = setTimeout(typeChar, 50);
             } else {
                 setIsTyping(false);
-                speakText(questionText, () => {
-                    setTimeout(() => {
-                        if (inputModeRef.current === 'voice') {
-                            startListeningRef.current?.();
-                        }
-                    }, 500);
-                });
             }
         };
 
+        // Slight initial delay to allow TTS to init
         typingTimeoutRef.current = setTimeout(typeChar, 100);
 
         return () => {
