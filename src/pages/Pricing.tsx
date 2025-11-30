@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Sparkles, FileText, LayoutTemplate, Zap, CreditCard, Loader2, Star, ShieldCheck, Crown } from "lucide-react";
+import { Check, Sparkles, FileText, LayoutTemplate, Zap, CreditCard, Loader2, Star, ShieldCheck, Crown, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -29,6 +29,7 @@ const plans = [
             "PDF Download",
             "Standard Formatting",
             "5 Free AI Credits",
+            "1 Mock Interview Session",
         ],
         popular: false,
         buttonText: "Start for Free",
@@ -64,6 +65,7 @@ const plans = [
         description: "Unlock everything forever. Best value for serious job seekers.",
         features: [
             "Unlock ALL Premium Templates",
+            "Unlimited AI Interview Coach",
             "Future Templates Included",
             "50 Bonus AI Credits",
             "Priority Support",
@@ -272,7 +274,7 @@ const Pricing = () => {
                     <div className="space-y-4">
                         <div className="text-center space-y-1">
                             <h2 className="text-xl font-bold tracking-tight">AI Credit Packs</h2>
-                            <p className="text-muted-foreground text-sm">Top up your credits for more AI generations.</p>
+                            <p className="text-muted-foreground text-sm">Top up your credits for resume generation.</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl mx-auto">
@@ -318,10 +320,10 @@ const Pricing = () => {
                             </div>
                             <div className="space-y-1.5">
                                 <div className="mx-auto w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
-                                    <Sparkles className="h-5 w-5" />
+                                    <MessageCircle className="h-5 w-5" />
                                 </div>
-                                <h4 className="font-semibold text-sm">Instant Access</h4>
-                                <p className="text-xs text-muted-foreground">Start creating immediately.</p>
+                                <h4 className="font-semibold text-sm">Interview Ready</h4>
+                                <p className="text-xs text-muted-foreground">Practice with our AI Coach.</p>
                             </div>
                         </div>
 
@@ -330,15 +332,15 @@ const Pricing = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left max-w-4xl mx-auto mt-4">
                                 <div className="space-y-1">
                                     <h4 className="font-medium text-sm">Is the Pro plan a subscription?</h4>
-                                    <p className="text-xs text-muted-foreground">No! It's a one-time payment for lifetime access to all templates.</p>
+                                    <p className="text-xs text-muted-foreground">No! It's a one-time payment for lifetime access to all features.</p>
                                 </div>
                                 <div className="space-y-1">
                                     <h4 className="font-medium text-sm">Do credits expire?</h4>
                                     <p className="text-xs text-muted-foreground">No, your purchased AI credits never expire.</p>
                                 </div>
                                 <div className="space-y-1">
-                                    <h4 className="font-medium text-sm">Can I buy credits without Pro?</h4>
-                                    <p className="text-xs text-muted-foreground">Yes, you can stay on the Free plan and just buy credit packs as needed.</p>
+                                    <h4 className="font-medium text-sm">How does the Interview Coach work?</h4>
+                                    <p className="text-xs text-muted-foreground">It simulates a real interview based on your resume and provides feedback. Pro users get unlimited sessions.</p>
                                 </div>
                                 <div className="space-y-1">
                                     <h4 className="font-medium text-sm">What payment methods do you accept?</h4>
