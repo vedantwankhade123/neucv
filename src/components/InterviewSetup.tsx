@@ -10,6 +10,7 @@ import { InterviewSetupData, InterviewLanguage, InterviewDuration, InterviewQues
 import { parseResumePDF, parseResumeImage, validateResumeFile, getLanguageDisplayName } from '@/lib/interview-service';
 import { useToast } from '@/hooks/use-toast';
 import { getAutoSaveSettings } from '@/lib/settings';
+import { Slider } from '@/components/ui/slider';
 
 interface InterviewSetupProps {
     onComplete: (setupData: InterviewSetupData) => void;
@@ -25,12 +26,16 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
     const [duration, setDuration] = useState<InterviewDuration>(30);
     const [numQuestions, setNumQuestions] = useState<InterviewQuestionCount>(10);
     const [language, setLanguage] = useState<InterviewLanguage>('english');
+    const [silenceDuration, setSilenceDuration] = useState<number>(5000);
     const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
         const settings = getAutoSaveSettings();
         if (settings.defaultLanguage) {
             setLanguage(settings.defaultLanguage as InterviewLanguage);
+        }
+        if (settings.silenceDuration) {
+            setSilenceDuration(settings.silenceDuration);
         }
     }, []);
 
@@ -124,7 +129,8 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
             jobRole: jobRole.trim(),
             duration,
             numQuestions,
-            language
+            language,
+            silenceDuration
         });
     };
 
@@ -337,6 +343,24 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                             </Select>
                             <p className="text-xs text-muted-foreground">
                                 Questions and feedback will be in {getLanguageDisplayName(language)}
+                            </p>
+                        </div>
+
+                        <div className="space-y-2 pt-2 border-t">
+                            <div className="flex justify-between items-center">
+                                <Label className="text-sm">Silence Detection Timer</Label>
+                                <span className="text-xs text-muted-foreground font-medium">{silenceDuration / 1000}s</span>
+                            </div>
+                            <Slider
+                                min={2000}
+                                max={10000}
+                                step={500}
+                                value={[silenceDuration]}
+                                onValueChange={(val) => setSilenceDuration(val[0])}
+                                className="w-full"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Microphone will automatically stop after detecting silence for this duration.
                             </p>
                         </div>
 

@@ -298,7 +298,8 @@ const InterviewCoach = () => {
             const settings = getAutoSaveSettings();
             setIsTTSEnabled(settings.interviewTTS);
             
-            silenceDurationRef.current = settings.silenceDuration || 5000;
+            // Explicitly use silence duration from setup data, falling back to 5000 if missing
+            silenceDurationRef.current = data.setupData.silenceDuration || 5000;
         } else {
             navigate('/dashboard/interview');
         }

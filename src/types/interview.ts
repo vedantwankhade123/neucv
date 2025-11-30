@@ -10,6 +10,7 @@ export interface InterviewSetupData {
     duration: InterviewDuration;
     numQuestions: InterviewQuestionCount;
     language: InterviewLanguage;
+    silenceDuration: number; // Added silence duration setting
 }
 
 export interface InterviewQuestion {
