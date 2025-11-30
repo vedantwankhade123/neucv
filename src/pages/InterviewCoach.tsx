@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
     Mic, MicOff, Square, Volume2, Loader2, Bot, Sparkles, 
-    CheckCircle2, ArrowRight, Clock, Settings, Home, Keyboard, SkipForward
+    CheckCircle2, ArrowRight, Clock, Settings, Home, Keyboard, SkipForward, Quote
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -394,10 +394,11 @@ const InterviewCoach = () => {
                 recognitionRef.current.start();
                 setIsListening(true);
                 
-                if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                silenceTimerRef.current = setTimeout(() => {
-                    stopListeningRef.current?.();
-                }, 5000);
+                // Removed silence timeout auto-submit
+                // if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+                // silenceTimerRef.current = setTimeout(() => {
+                //     stopListeningRef.current?.();
+                // }, 5000);
             }
         } catch (e) {
             console.log("Mic already active");
@@ -434,11 +435,12 @@ const InterviewCoach = () => {
                         setCurrentAnswer(prev => prev + finalTranscript);
                     }
 
-                    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                    silenceTimerRef.current = setTimeout(() => {
-                        stopListeningRef.current?.();
-                        toast.info("Microphone stopped", { description: "Silence detected." });
-                    }, 2500);
+                    // Removed auto-stop on silence
+                    // if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+                    // silenceTimerRef.current = setTimeout(() => {
+                    //     stopListeningRef.current?.();
+                    //     toast.info("Microphone stopped", { description: "Silence detected." });
+                    // }, 2500);
                 };
 
                 recognition.onerror = (event: any) => {
@@ -448,6 +450,11 @@ const InterviewCoach = () => {
                 };
 
                 recognition.onend = () => {
+                    // Automatically restart listening if we're supposed to be listening (and not stopped manually)
+                    // This creates a "continuous" listening experience until the user toggles it off
+                    // But we rely on isListening state. If it was true, we try to start again.
+                    // However, we need to be careful not to create a loop if there's an error.
+                    // For now, we'll let it stop and the user has to restart, or we handle it in toggle.
                     setIsListening(false);
                 };
 
@@ -485,9 +492,10 @@ const InterviewCoach = () => {
                 setIsTyping(false);
                 speakText(questionText, () => {
                     setTimeout(() => {
-                        if (inputModeRef.current === 'voice') {
-                            startListeningRef.current?.();
-                        }
+                        // Removed auto-start listening
+                        // if (inputModeRef.current === 'voice') {
+                        //     startListeningRef.current?.();
+                        // }
                     }, 500);
                 });
             }
@@ -865,22 +873,51 @@ const InterviewCoach = () => {
                     <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[400px]">
                         
                         {/* Question Card */}
-                        <Card className="p-6 md:p-8 bg-white border-0 shadow-lg shadow-slate-200/40 rounded-3xl flex flex-col h-[280px] shrink-0 relative overflow-hidden transition-all group hover:shadow-xl hover:shadow-slate-200/50">
-                            <div className="absolute top-0 left-0 w-1.5 h-full bg-primary transition-all group-hover:w-2" />
-                            <div className="flex flex-wrap gap-2 mb-4 shrink-0">
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 px-2.5 py-0.5 text-xs font-medium">
-                                    {currentQuestion?.category}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs text-slate-500 capitalize px-2.5 py-0.5 bg-slate-50 border-slate-200">
-                                    {currentQuestion?.difficulty}
-                                </Badge>
+                        <Card className="p-0 border-0 shadow-xl shadow-slate-200/60 rounded-[2rem] flex flex-col h-[320px] shrink-0 relative overflow-hidden bg-white group ring-1 ring-slate-100">
+                            {/* Decorative Top Bar */}
+                            <div className="h-1.5 w-full bg-gradient-to-r from-primary/80 via-primary to-primary/80" />
+                            
+                            <div className="p-8 flex flex-col h-full relative z-10">
+                                {/* Header Row: Number & Badges */}
+                                <div className="flex items-center justify-between mb-6">
+                                    <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                                        Question {currentQuestionIndex + 1} <span className="text-slate-300 font-normal">/ {interviewData?.questions.length}</span>
+                                    </span>
+                                    <div className="flex gap-2">
+                                        <Badge variant="secondary" className="bg-primary/5 text-primary hover:bg-primary/10 border-0 px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                                            {currentQuestion?.category}
+                                        </Badge>
+                                        <Badge variant="outline" className={cn(
+                                            "text-xs capitalize px-3 py-1 border font-medium",
+                                            currentQuestion?.difficulty === 'easy' ? "border-green-200 text-green-700 bg-green-50" :
+                                            currentQuestion?.difficulty === 'medium' ? "border-amber-200 text-amber-700 bg-amber-50" :
+                                            "border-red-200 text-red-700 bg-red-50"
+                                        )}>
+                                            {currentQuestion?.difficulty}
+                                        </Badge>
+                                    </div>
+                                </div>
+
+                                {/* Question Text Area */}
+                                <div className="flex-grow flex flex-col justify-center relative">
+                                    {/* Quote Icon Watermark */}
+                                    <div className="absolute -top-4 -left-2 text-slate-100 text-8xl font-serif leading-none select-none pointer-events-none transform -translate-y-4">
+                                        <Quote className="h-20 w-20 text-slate-50 fill-current opacity-50" />
+                                    </div>
+                                    
+                                    <div className="flex-grow overflow-y-auto hide-scrollbar z-10">
+                                        <h2 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug tracking-tight relative z-10">
+                                            {displayedQuestion}
+                                            {isTyping && (
+                                                <span className="inline-block w-3 h-8 ml-1.5 align-sub bg-primary animate-pulse rounded-sm" />
+                                            )}
+                                        </h2>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex-grow overflow-y-auto hide-scrollbar flex flex-col justify-center">
-                                <h2 className="text-xl md:text-2xl font-bold text-slate-900 leading-relaxed tracking-tight">
-                                    {displayedQuestion}
-                                    {isTyping && <span className="inline-block w-2 h-5 ml-1 bg-primary align-middle animate-pulse rounded-full" />}
-                                </h2>
-                            </div>
+
+                            {/* Background decoration */}
+                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-br from-slate-50 to-slate-100 rounded-tl-full opacity-50 pointer-events-none" />
                         </Card>
 
                         {/* Answer Input Area */}
