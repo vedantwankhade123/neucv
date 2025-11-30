@@ -439,7 +439,7 @@ const Landing = () => {
                 </div>
                 
                 {/* Floating Badge */}
-                <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-xl border border-slate-100 flex items-center gap-3 animate-bounce duration-[3000ms]">
+                <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-xl border border-slate-100 flex items-center gap-3 animate-float">
                   <div className="bg-green-100 p-2 rounded-full">
                     <Star className="h-5 w-5 text-green-600 fill-current" />
                   </div>
