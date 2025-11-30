@@ -371,16 +371,43 @@ const InterviewCoach = () => {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(v => 
-            v.name.includes('Google US English') || 
-            v.name.includes('Samantha') ||
-            v.name.includes('Neural')
-        ) || voices[0];
+        // --- IMPROVED VOICE SELECTION LOGIC ---
+        // Priorities:
+        // 1. "Microsoft ... Online (Natural)" - Edge's Server-Side Neural voices (Best Free)
+        // 2. "Google US English" - Chrome's standard voice (Decent)
+        // 3. "Samantha" - Mac standard (Okay)
+        // 4. Any voice containing "Natural" or "Neural"
         
-        if (preferredVoice) utterance.voice = preferredVoice;
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        
+        let preferredVoice = voices.find(v => v.name.includes("Microsoft") && v.name.includes("Online") && v.name.includes("Natural"));
+        
+        if (!preferredVoice) {
+            preferredVoice = voices.find(v => v.name.includes("Natural") && v.lang.startsWith("en"));
+        }
+        
+        if (!preferredVoice) {
+            preferredVoice = voices.find(v => v.name === "Google US English");
+        }
+        
+        if (!preferredVoice) {
+            preferredVoice = voices.find(v => v.name === "Samantha");
+        }
+        
+        // Fallback to any English voice
+        if (!preferredVoice) {
+            preferredVoice = voices.find(v => v.lang.startsWith("en"));
+        }
+        
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+            // Console log to debug which voice is being used
+            console.log("Using voice:", preferredVoice.name);
+        }
+
+        // Tweak pitch and rate slightly for a less robotic feel
+        utterance.rate = 1.05; // Slightly faster helps flow
+        utterance.pitch = 1.0; 
 
         utterance.onstart = () => setIsAiSpeaking(true);
         utterance.onend = () => {
