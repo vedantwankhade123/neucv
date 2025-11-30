@@ -1,7 +1,8 @@
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { InterviewData } from '@/types/interview';
-import { ArrowLeft, Download, CheckCircle2, AlertCircle, Clock, FileText, BarChart3, Trophy, ArrowUpRight, Target, Sparkles, User, ChevronDown, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle2, AlertCircle, Clock, FileText, BarChart3, Trophy, ArrowUpRight, Target, Sparkles, User, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/interview-service';
 import { UserNav } from '@/components/UserNav';
@@ -14,6 +15,8 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion";
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 interface InterviewReportProps {
     interviewData: InterviewData;
@@ -23,6 +26,8 @@ interface InterviewReportProps {
 
 export function InterviewReport({ interviewData, onNewInterview, onBackToDashboard }: InterviewReportProps) {
     const { setupData, questions, responses, report, startTime, endTime } = interviewData;
+    const reportRef = useRef<HTMLDivElement>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const totalDuration = endTime && startTime ? Math.floor((endTime - startTime) / 1000) : 0;
     const overallScore = report?.overallScore || 0;
@@ -33,33 +38,54 @@ export function InterviewReport({ interviewData, onNewInterview, onBackToDashboa
         return 'text-red-600';
     };
 
-    const handleDownloadReport = () => {
-        const reportText = `
-INTERVIEW PERFORMANCE REPORT
-============================
-Job Role: ${setupData.jobRole}
-Date: ${new Date(startTime).toLocaleString()}
-Overall Score: ${overallScore}/100
+    const handleDownloadReport = async () => {
+        if (!reportRef.current) return;
+        
+        setIsDownloading(true);
+        try {
+            const element = reportRef.current;
+            const canvas = await html2canvas(element, {
+                scale: 2, // Higher scale for better quality
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#F8FAFC' // Matches bg-slate-50
+            });
 
-STRENGTHS:
-${report?.strengths?.map(s => `- ${s}`).join('\n') || 'No strengths analyzed.'}
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
 
-AREAS FOR IMPROVEMENT:
-${report?.areasForImprovement?.map(a => `- ${a}`).join('\n') || 'No improvements analyzed.'}
+            const imgWidth = 210; // A4 width in mm
+            const pageHeight = 297; // A4 height in mm
+            
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
 
-RECOMMENDATIONS:
-${report?.recommendations?.map(r => `- ${r}`).join('\n') || 'No recommendations available.'}
-        `.trim();
+            // Add first page
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
 
-        const blob = new Blob([reportText], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `interview-report-${new Date().toISOString().split('T')[0]}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+            // Add subsequent pages if content overflows
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            const dateStr = new Date(startTime).toISOString().split('T')[0];
+            const sanitizedRole = setupData.jobRole.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+            pdf.save(`interview-report-${sanitizedRole}-${dateStr}.pdf`);
+        } catch (error) {
+            console.error('PDF generation failed:', error);
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     return (
@@ -76,8 +102,19 @@ ${report?.recommendations?.map(r => `- ${r}`).join('\n') || 'No recommendations 
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={handleDownloadReport} className="border-slate-200 text-slate-700">
-                        <Download className="mr-2 h-4 w-4" /> Export PDF
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleDownloadReport} 
+                        className="border-slate-200 text-slate-700"
+                        disabled={isDownloading}
+                    >
+                        {isDownloading ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Download className="mr-2 h-4 w-4" />
+                        )}
+                        {isDownloading ? 'Generating...' : 'Export PDF'}
                     </Button>
                     <UserNav />
                 </div>
@@ -85,7 +122,7 @@ ${report?.recommendations?.map(r => `- ${r}`).join('\n') || 'No recommendations 
 
             {/* Main Content */}
             <main className="flex-1 overflow-y-auto bg-slate-50/50 p-6 lg:p-8">
-                <div className="max-w-5xl mx-auto space-y-8">
+                <div ref={reportRef} className="max-w-5xl mx-auto space-y-8 bg-slate-50/50 p-2">
                     
                     {/* Top Stats Row */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
