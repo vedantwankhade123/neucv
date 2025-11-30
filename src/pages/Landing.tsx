@@ -438,16 +438,6 @@ const Landing = () => {
                   </div>
                 </div>
                 
-                {/* Floating Badge */}
-                <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-xl border border-slate-100 flex items-center gap-3">
-                  <div className="bg-green-100 p-2 rounded-full">
-                    <Star className="h-5 w-5 text-green-600 fill-current" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium">Average Score Increase</p>
-                    <p className="text-lg font-bold text-slate-900">+40%</p>
-                  </div>
-                </div>
               </div>
 
             </div>
