@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Download, CheckCircle, Eraser, RotateCcw, ArrowLeft, MoreVertical, Save, Bot, Sparkles } from 'lucide-react';
+import { Download, CheckCircle, Eraser, RotateCcw, ArrowLeft, MoreVertical, Save, Bot, Sparkles, Heart } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Button } from './ui/button';
 import { UserNav } from './UserNav';
 import {
@@ -136,7 +137,7 @@ const Header = ({ onPreviewClick, onClear, onResetStyles, mobileView, onDownload
 
         <Button onClick={onPreviewClick} className="rounded-full shadow-md hover:shadow-lg transition-shadow">
           <Download className="mr-2 h-4 w-4" />
-          Preview & Download
+          Download
         </Button>
         <UserNav />
       </div>

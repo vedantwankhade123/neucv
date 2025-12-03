@@ -6,7 +6,8 @@ import { generateInterviewQuestions } from '@/lib/gemini';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Share2, Heart } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card } from '@/components/ui/card';
 import { UserNav } from '@/components/UserNav';
 
@@ -64,7 +65,49 @@ const InterviewSetupPage = () => {
                 <header className="bg-white border-b p-3 hidden md:block flex-shrink-0 no-print h-14">
                     <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
                         <h1 className="text-lg font-bold tracking-tight">Interview Coach</h1>
-                        <UserNav />
+                        <div className="flex items-center gap-2">
+                            <button
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                                onClick={() => {
+                                    if (navigator.share) {
+                                        navigator.share({
+                                            title: 'NeuCV - AI Resume Builder',
+                                            text: 'Check out this amazing free AI Resume Builder!',
+                                            url: window.location.origin
+                                        }).catch(console.error);
+                                    } else {
+                                        navigator.clipboard.writeText(window.location.origin);
+                                    }
+                                }}
+                            >
+                                <Share2 className="h-4 w-4" />
+                            </button>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+                                        <Heart className="h-4 w-4 text-red-500" />
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80" align="end">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
+                                            <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
+                                        </div>
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="bg-white p-3 rounded-lg border">
+                                                <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
+                                            </div>
+                                            <div className="text-center space-y-1">
+                                                <p className="font-semibold text-sm">Vedant Wankhade</p>
+                                                <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                            <UserNav />
+                        </div>
                     </div>
                 </header>
                 <div className="flex-grow flex items-center justify-center p-6">
@@ -88,10 +131,52 @@ const InterviewSetupPage = () => {
             <header className="bg-white border-b p-3 hidden md:block flex-shrink-0 no-print h-14">
                 <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
                     <h1 className="text-lg font-bold tracking-tight">Interview Coach</h1>
-                    <UserNav />
+                    <div className="flex items-center gap-2">
+                        <button
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                            onClick={() => {
+                                if (navigator.share) {
+                                    navigator.share({
+                                        title: 'NeuCV - AI Resume Builder',
+                                        text: 'Check out this amazing free AI Resume Builder!',
+                                        url: window.location.origin
+                                    }).catch(console.error);
+                                } else {
+                                    navigator.clipboard.writeText(window.location.origin);
+                                }
+                            }}
+                        >
+                            <Share2 className="h-4 w-4" />
+                        </button>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+                                    <Heart className="h-4 w-4 text-red-500" />
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80" align="end">
+                                <div className="space-y-4">
+                                    <div>
+                                        <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
+                                        <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="bg-white p-3 rounded-lg border">
+                                            <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
+                                        </div>
+                                        <div className="text-center space-y-1">
+                                            <p className="font-semibold text-sm">Vedant Wankhade</p>
+                                            <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                        <UserNav />
+                    </div>
                 </div>
             </header>
-            
+
             <main className="flex-grow p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
                 <div className="mb-8">
                     <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Start a New Session</h2>
@@ -99,7 +184,7 @@ const InterviewSetupPage = () => {
                         Practice your interview skills with our AI-powered coach. Upload your resume to get started.
                     </p>
                 </div>
-                
+
                 <InterviewSetup
                     onComplete={handleSetupComplete}
                     onCancel={() => navigate('/dashboard')}

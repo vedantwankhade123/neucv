@@ -12,11 +12,20 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from 'firebase/auth';
-import { Settings, LogOut } from "lucide-react";
+import { Settings, LogOut, Zap } from "lucide-react";
+import { getUserProfile } from "@/lib/user-service";
+import { useState, useEffect } from "react";
 
 export function UserNav() {
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
+  const [credits, setCredits] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      getUserProfile(user).then(profile => setCredits(profile.credits));
+    }
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -48,6 +57,12 @@ export function UserNav() {
             <p className="text-xs leading-none text-muted-foreground">
               {user?.email || 'No email'}
             </p>
+            {credits !== null && (
+              <div className="flex items-center gap-1 mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                <Zap className="h-3 w-3" />
+                <span>{credits} Credits</span>
+              </div>
+            )}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

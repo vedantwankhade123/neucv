@@ -11,33 +11,40 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Separator } from '@/components/ui/separator';
 import { deleteAllResumes, getResumes } from '@/lib/resume-storage';
 import { showError, showSuccess } from '@/utils/toast';
 import { UserNav } from '@/components/UserNav';
-import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, Globe, Timer } from 'lucide-react';
+import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, Globe, Timer, Share2, FileText, MessageCircle, Heart, Zap } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AutoSaveToggle } from '../components/AutoSaveToggle';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 
 import { auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { getUserProfile, addCredits } from '@/lib/user-service';
+import { getUserProfile, addCredits, togglePersonalApiKeyPreference } from '@/lib/user-service';
 import { Sparkles, CreditCard } from 'lucide-react';
 import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
+import { Key, QrCode } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { CreditHistoryDialog } from '@/components/CreditHistoryDialog';
+import { CreditRulesDialog } from '@/components/CreditRulesDialog';
+import { CreditTransaction } from '@/types/user';
 
 const Settings = () => {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [user, loading] = useAuthState(auth);
-  
+
   // Settings state
   const [interviewSettings, setInterviewSettings] = useState({
     interviewTTS: true,
@@ -48,11 +55,40 @@ const Settings = () => {
   useEffect(() => {
     const settings = getAutoSaveSettings();
     setInterviewSettings({
-        interviewTTS: settings.interviewTTS,
-        defaultLanguage: settings.defaultLanguage || 'english',
-        silenceDuration: settings.silenceDuration || 5000
+      interviewTTS: settings.interviewTTS,
+      defaultLanguage: settings.defaultLanguage || 'english',
+      silenceDuration: settings.silenceDuration || 5000
     });
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+      setIsApiKeySaved(true);
+    }
   }, []);
+
+  const [apiKey, setApiKey] = useState('');
+  const [isApiKeySaved, setIsApiKeySaved] = useState(false);
+  // Initialize from localStorage to prevent flickering
+  const [usePersonalKey, setUsePersonalKey] = useState(() => {
+    return localStorage.getItem('always_use_personal_key') === 'true';
+  });
+  const [credits, setCredits] = useState<number | null>(null);
+  const [nextResetDate, setNextResetDate] = useState<string>('');
+  const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
+
+  const handleSaveApiKey = () => {
+    if (!apiKey.trim()) return;
+    localStorage.setItem('gemini_api_key', apiKey);
+    setIsApiKeySaved(true);
+    showSuccess("API Key saved successfully!");
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem('gemini_api_key');
+    setApiKey('');
+    setIsApiKeySaved(false);
+    showSuccess("API Key removed.");
+  };
 
   const handleInterviewSettingChange = (key: string, value: any) => {
     setInterviewSettings(prev => ({ ...prev, [key]: value }));
@@ -65,13 +101,40 @@ const Settings = () => {
 
   const userName = user?.displayName || 'Open User';
   const userEmail = user?.email || 'No email';
-  const [credits, setCredits] = useState<number | null>(null);
 
   useEffect(() => {
     if (user) {
-      getUserProfile(user).then(profile => setCredits(profile.credits));
+      getUserProfile(user).then(profile => {
+        setCredits(profile.credits);
+
+        // If profile has a preference, use it and sync local storage
+        if (profile.usePersonalApiKey !== undefined) {
+          setUsePersonalKey(profile.usePersonalApiKey);
+          localStorage.setItem('always_use_personal_key', String(profile.usePersonalApiKey));
+        }
+
+        // Calculate next reset date
+        const lastReset = profile.lastCreditReset || profile.createdAt;
+        const nextReset = new Date(lastReset + (30 * 24 * 60 * 60 * 1000));
+        setNextResetDate(nextReset.toLocaleDateString());
+
+        // Set history
+        setCreditHistory(profile.creditHistory || []);
+      });
     }
   }, [user]);
+
+  const handleTogglePersonalKey = async (checked: boolean) => {
+    if (!user) return;
+    setUsePersonalKey(checked);
+    localStorage.setItem('always_use_personal_key', String(checked));
+    await togglePersonalApiKeyPreference(user.uid, checked);
+    if (checked) {
+      showSuccess("Now prioritizing your personal API key.");
+    } else {
+      showSuccess("Now using free credits first.");
+    }
+  };
 
   const handleBuyCredits = async (amount: number, cost: string) => {
     if (!user) return;
@@ -155,7 +218,49 @@ const Settings = () => {
       <header className="bg-transparent p-4 hidden md:block flex-shrink-0 no-print h-16 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
           <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'NeuCV - AI Resume Builder',
+                    text: 'Check out this amazing free AI Resume Builder!',
+                    url: window.location.origin
+                  }).catch(console.error);
+                } else {
+                  navigator.clipboard.writeText(window.location.origin);
+                }
+              }}
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Heart className="h-4 w-4 text-red-500" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
+                    <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="bg-white p-3 rounded-lg border">
+                      <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p className="font-semibold text-sm">Vedant Wankhade</p>
+                      <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <UserNav />
           </div>
         </div>
@@ -190,6 +295,218 @@ const Settings = () => {
             </Card>
           </div>
 
+          {/* Credits & Usage Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-medium text-muted-foreground ml-1">Credits & Usage</h2>
+            <Card className={cardClasses}>
+              <CardContent className="p-6">
+                <div className="flex flex-col gap-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-amber-100 dark:bg-amber-900/20 rounded-full">
+                        <Zap className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold">Monthly Free Credits</h3>
+                        <p className="text-sm text-muted-foreground">Resets on {nextResetDate}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-primary">{credits !== null ? credits : '-'}</div>
+                      <p className="text-xs text-muted-foreground">credits remaining</p>
+                      <div className="mt-2">
+                        <CreditHistoryDialog transactions={creditHistory} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="p-4 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between h-full">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="h-4 w-4 text-blue-400" />
+                          <span className="font-semibold text-base">Resume AI Task</span>
+                        </div>
+                        <div className="text-slate-400 text-xs">Generates summaries, skills, and improvements.</div>
+                      </div>
+                      <div className="mt-4 flex items-center justify-between">
+                        <span className="font-bold text-lg">1 Credit</span>
+                        <CreditRulesDialog mode="resume" trigger={
+                          <Button variant="secondary" size="sm" className="h-7 text-xs">View Details</Button>
+                        } />
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between h-full">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <MessageCircle className="h-4 w-4 text-purple-400" />
+                          <span className="font-semibold text-base">Interview Session</span>
+                        </div>
+                        <div className="text-slate-400 text-xs">Complete interview practice with AI feedback.</div>
+                      </div>
+                      <div className="mt-4 flex items-center justify-between">
+                        <span className="font-bold text-lg">5 Credits</span>
+                        <CreditRulesDialog mode="interview" trigger={
+                          <Button variant="secondary" size="sm" className="h-7 text-xs">View Details</Button>
+                        } />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* AI Configuration Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-medium text-muted-foreground ml-1">AI Configuration</h2>
+            <Card className={cardClasses}>
+              <CardHeader className="pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      <div className="p-2 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg">
+                        <Key className="h-5 w-5 text-white" />
+                      </div>
+                      Google Gemini API Key
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="use-personal-key" className="text-sm font-medium cursor-pointer">
+                        Use Key
+                      </Label>
+                      <Switch
+                        id="use-personal-key"
+                        checked={usePersonalKey}
+                        onCheckedChange={handleTogglePersonalKey}
+                      />
+                    </div>
+                  </div>
+                  <CardDescription className="text-sm">
+                    Add your own API key to unlock unlimited usage or when you run out of credits
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* API Key Input */}
+                <div className="space-y-3">
+                  <Label htmlFor="api-key" className="text-sm font-medium">Your API Key</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        id="api-key"
+                        type="password"
+                        placeholder="AIza..."
+                        value={apiKey}
+                        onChange={(e) => {
+                          setApiKey(e.target.value);
+                          setIsApiKeySaved(false);
+                        }}
+                        className="font-mono text-sm pr-10"
+                      />
+                      {apiKey && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {isApiKeySaved ? (
+                            <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          ) : (
+                            <svg className="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      onClick={handleSaveApiKey}
+                      disabled={!apiKey.trim() || isApiKeySaved}
+                      className={isApiKeySaved ? "bg-green-600 hover:bg-green-600 min-w-[100px]" : "min-w-[100px]"}
+                    >
+                      {isApiKeySaved ? (
+                        <>
+                          <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Saved
+                        </>
+                      ) : "Save Key"}
+                    </Button>
+                    {localStorage.getItem('gemini_api_key') && (
+                      <Button variant="outline" onClick={handleClearApiKey} className="min-w-[80px]">
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <svg className="h-4 w-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>Your key is encrypted and stored locally in your browser. It's never sent to our servers.</span>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Get API Key Section */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-blue-500 rounded-lg flex-shrink-0">
+                      <Sparkles className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="space-y-3 flex-1">
+                      <div>
+                        <h4 className="text-sm font-semibold mb-1" style={{ color: '#1e3a8a' }}>
+                          Don't have an API key yet?
+                        </h4>
+                        <p className="text-xs" style={{ color: '#1e3a8a' }}>
+                          Get your free Google Gemini API key in less than 2 minutes
+                        </p>
+                      </div>
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Get Free API Key
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Features Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                      <h5 className="text-sm font-semibold" style={{ color: '#581c87' }}>Resume AI</h5>
+                    </div>
+                    <ul className="text-xs space-y-1 ml-6 list-disc" style={{ color: '#581c87' }}>
+                      <li>Generate summaries</li>
+                      <li>Enhance descriptions</li>
+                      <li>Suggest skills</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MessageCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      <h5 className="text-sm font-semibold" style={{ color: '#14532d' }}>Interview Coach</h5>
+                    </div>
+                    <ul className="text-xs space-y-1 ml-6 list-disc" style={{ color: '#14532d' }}>
+                      <li>Practice interviews</li>
+                      <li>Get AI feedback</li>
+                      <li>Improve answers</li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Interview Coach Settings */}
           <div className="space-y-4">
             <h2 className="text-lg font-medium text-muted-foreground ml-1">Interview Coach</h2>
@@ -203,128 +520,112 @@ const Settings = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                            <Volume2 className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label htmlFor="interview-tts" className="text-base font-medium cursor-pointer">
-                                AI Voice (Text-to-Speech)
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                                Read interview questions aloud
-                            </p>
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-md">
+                      <Volume2 className="h-5 w-5 text-primary" />
                     </div>
-                    <Switch
-                        id="interview-tts"
-                        checked={interviewSettings.interviewTTS}
-                        onCheckedChange={(checked) => handleInterviewSettingChange('interviewTTS', checked)}
-                    />
+                    <div className="space-y-0.5">
+                      <Label htmlFor="interview-tts" className="text-base font-medium cursor-pointer">
+                        AI Voice (Text-to-Speech)
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Read interview questions aloud
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="interview-tts"
+                    checked={interviewSettings.interviewTTS}
+                    onCheckedChange={(checked) => handleInterviewSettingChange('interviewTTS', checked)}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                            <Timer className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5 w-full">
-                            <Label htmlFor="silence-duration" className="text-base font-medium">
-                                Auto-Stop Microphone (Silence)
-                            </Label>
-                            <p className="text-sm text-muted-foreground mb-3">
-                                Stop recording after detecting silence for: <strong>{interviewSettings.silenceDuration / 1000}s</strong>
-                            </p>
-                            <Slider
-                                id="silence-duration"
-                                min={2000}
-                                max={10000}
-                                step={500}
-                                value={[interviewSettings.silenceDuration]}
-                                onValueChange={(val) => handleInterviewSettingChange('silenceDuration', val[0])}
-                                className="w-full max-w-xs"
-                            />
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-md">
+                      <Timer className="h-5 w-5 text-primary" />
                     </div>
+                    <div className="space-y-0.5 w-full">
+                      <Label htmlFor="silence-duration" className="text-base font-medium">
+                        Auto-Stop Microphone (Silence)
+                      </Label>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Stop recording after detecting silence for: <strong>{interviewSettings.silenceDuration / 1000}s</strong>
+                      </p>
+                      <Slider
+                        id="silence-duration"
+                        min={2000}
+                        max={10000}
+                        step={500}
+                        value={[interviewSettings.silenceDuration]}
+                        onValueChange={(val) => handleInterviewSettingChange('silenceDuration', val[0])}
+                        className="w-full max-w-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-md">
-                            <Globe className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-0.5">
-                            <Label htmlFor="default-language" className="text-base font-medium">
-                                Default Interview Language
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                                Set your preferred language for new interview sessions
-                            </p>
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-md">
+                      <Globe className="h-5 w-5 text-primary" />
                     </div>
-                    <Select 
-                        value={interviewSettings.defaultLanguage} 
-                        onValueChange={(value) => handleInterviewSettingChange('defaultLanguage', value)}
-                    >
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select Language" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="english">English</SelectItem>
-                            <SelectItem value="hinglish">Hinglish</SelectItem>
-                            <SelectItem value="hindi">Hindi</SelectItem>
-                            <SelectItem value="marathi">Marathi</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="space-y-0.5">
+                      <Label htmlFor="default-language" className="text-base font-medium">
+                        Default Interview Language
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Set your preferred language for new interview sessions
+                      </p>
+                    </div>
+                  </div>
+                  <Select
+                    value={interviewSettings.defaultLanguage}
+                    onValueChange={(value) => handleInterviewSettingChange('defaultLanguage', value)}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="english">English</SelectItem>
+                      <SelectItem value="hinglish">Hinglish</SelectItem>
+                      <SelectItem value="hindi">Hindi</SelectItem>
+                      <SelectItem value="marathi">Marathi</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* AI Credits Section */}
+
+
+          {/* Contribute Section */}
           <div className="space-y-4">
-            <h2 className="text-lg font-medium text-muted-foreground ml-1">AI Credits</h2>
+            <h2 className="text-lg font-medium text-muted-foreground ml-1">Support Development</h2>
             <Card className={cardClasses}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-purple-500" />
-                  AI Usage & Credits
+                  <Heart className="h-5 w-5 text-red-500" />
+                  Contribute
                 </CardTitle>
-                <CardDescription>Manage your credits for AI generation features.</CardDescription>
+                <CardDescription>
+                  This project is free and open source. If you find it useful, consider supporting the developer.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl border">
+              <CardContent className="flex flex-col md:flex-row gap-6 items-center">
+                <div className="bg-white p-4 rounded-xl border shadow-sm">
+                  <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-48 h-48 object-contain rounded-lg border-2 border-slate-100" />
+                </div>
+                <div className="space-y-4 text-center md:text-left">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Available Credits</p>
-                    <h3 className="text-3xl font-bold text-primary">{credits !== null ? credits : '...'}</h3>
+                    <h4 className="font-semibold">Vedant Wankhade</h4>
+                    <p className="text-sm text-muted-foreground">UPI ID: 9175988560@kotak811</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-1">Free Plan includes 5 initial credits.</p>
-                    <p className="text-xs text-muted-foreground">1 Generation = 1 Credit</p>
-                  </div>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    Your contributions help cover server costs and keep the project alive. Thank you!
+                  </p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Button variant="outline" className="h-auto py-4 flex flex-col items-start gap-1" onClick={() => handleBuyCredits(10, '$4.99')}>
-                    <div className="flex items-center gap-2 w-full">
-                      <CreditCard className="h-4 w-4" />
-                      <span className="font-semibold">Buy 10 Credits</span>
-                      <span className="ml-auto text-sm text-muted-foreground">$4.99</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Perfect for a few resumes.</p>
-                  </Button>
-                  <Button variant="outline" className="h-auto py-4 flex flex-col items-start gap-1" onClick={() => handleBuyCredits(50, '$19.99')}>
-                    <div className="flex items-center gap-2 w-full">
-                      <CreditCard className="h-4 w-4" />
-                      <span className="font-semibold">Buy 50 Credits</span>
-                      <span className="ml-auto text-sm text-muted-foreground">$19.99</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Best value for power users.</p>
-                  </Button>
-                </div>
-                <p className="text-xs text-center text-muted-foreground italic">
-                  * This is a demo payment system. No actual money will be charged.
-                </p>
               </CardContent>
             </Card>
           </div>
@@ -405,17 +706,13 @@ const Settings = () => {
                     <p className="text-sm text-muted-foreground">Version 1.0.0</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" asChild>
-                  <a href="https://github.com/vedantwankhade123/biocv" target="_blank" rel="noopener noreferrer">
-                    <Github className="h-5 w-5 text-muted-foreground" />
-                  </a>
-                </Button>
+
               </CardContent>
             </Card>
           </div>
 
         </div>
-      </main>
+      </main >
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -432,7 +729,7 @@ const Settings = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 };
 

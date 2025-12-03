@@ -3,7 +3,9 @@ import { ResumeStyle } from '@/types/resume';
 import { resumeTemplates } from '@/lib/resume-templates';
 import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { Search, Eye, Loader2, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Eye, Loader2, FileText, Share2, Heart } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { JobRoleDialog } from '@/components/JobRoleDialog';
 import { cn } from '@/lib/utils';
 import { createResume } from '@/lib/resume-storage';
@@ -110,7 +112,51 @@ const Templates = () => {
       <header className="bg-transparent p-4 hidden md:block flex-shrink-0 no-print h-16">
         <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
           <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
-          <UserNav />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'NeuCV - AI Resume Builder',
+                    text: 'Check out this amazing free AI Resume Builder!',
+                    url: window.location.origin
+                  }).catch(console.error);
+                } else {
+                  navigator.clipboard.writeText(window.location.origin);
+                }
+              }}
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Heart className="h-4 w-4 text-red-500" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
+                    <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="bg-white p-3 rounded-lg border">
+                      <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p className="font-semibold text-sm">Vedant Wankhade</p>
+                      <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <UserNav />
+          </div>
         </div>
       </header>
       <main className="flex-grow p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">

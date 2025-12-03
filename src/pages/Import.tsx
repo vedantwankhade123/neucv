@@ -44,9 +44,8 @@ export default function Import() {
         } catch (error) {
             console.error('Parsing error:', error);
             toast({
-                title: 'Parsing failed',
-                description: error instanceof Error ? error.message : 'Failed to parse resume. Please try again.',
-                variant: 'destructive',
+                title: 'Unable to Parse Resume',
+                description: error instanceof Error ? error.message : 'Failed to parse resume. Please try again.'
             });
         } finally {
             setIsProcessing(false);
@@ -109,9 +108,8 @@ export default function Import() {
         } catch (error) {
             console.error('Error creating resume:', error);
             toast({
-                title: 'Failed to create resume',
-                description: 'Please try again.',
-                variant: 'destructive',
+                title: 'Unable to Create Resume',
+                description: 'Please try again.'
             });
         } finally {
             setIsProcessing(false);
@@ -248,10 +246,10 @@ function StepIndicator({
         <div className="flex flex-col items-center space-y-2">
             <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${isCompleted
-                        ? 'bg-primary text-primary-foreground'
-                        : isActive
-                            ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
-                            : 'bg-muted text-muted-foreground'
+                    ? 'bg-primary text-primary-foreground'
+                    : isActive
+                        ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
+                        : 'bg-muted text-muted-foreground'
                     }`}
             >
                 {isCompleted ? '✓' : number}

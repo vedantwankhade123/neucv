@@ -180,7 +180,7 @@ const PreviewModal = ({ isOpen, onClose, resumeData, templateId, resumeStyle }: 
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[95vw] max-w-5xl h-[90vh] md:h-[85vh] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
-          <DialogTitle>Preview & Download</DialogTitle>
+          <DialogTitle>Download</DialogTitle>
         </DialogHeader>
         <div className="grid grid-rows-[auto_1fr] md:grid-rows-1 md:grid-cols-5 flex-grow min-h-0">
           <div className="md:col-span-3 bg-secondary relative overflow-hidden">

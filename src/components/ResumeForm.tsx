@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ResumeData, LayoutItem, ResumeStyle } from '@/types/resume';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -22,12 +23,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { generateResumeSummary, generateExperienceDescription, generateSkills, generateContextAwareSkills, generateEducationDescription, generateCustomSectionContent } from '@/lib/gemini';
+import { generateResumeSummary, generateExperienceDescription, generateContextAwareSkills, generateCustomSectionContent } from '@/lib/gemini';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { SummaryGenerationDialog, SummaryGenerationData } from './SummaryGenerationDialog';
 import { SkillsGenerationDialog } from './SkillsGenerationDialog';
+import { getUserProfile, deductCredits } from '@/lib/user-service';
+
 
 interface ResumeFormProps {
   resumeData: ResumeData;
@@ -45,20 +48,10 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
   const [isSkillsDialogOpen, setIsSkillsDialogOpen] = useState(false);
   const [activeExperienceIndex, setActiveExperienceIndex] = useState<number | null>(null);
-  const [activeEducationIndex, setActiveEducationIndex] = useState<number | null>(null);
   const [activeCustomSectionIndex, setActiveCustomSectionIndex] = useState<number | null>(null);
   const [activeCustomItemIndex, setActiveCustomItemIndex] = useState<{ sectionIndex: number; itemIndex: number } | null>(null);
   const [user] = useAuthState(auth);
   const { toast } = useToast();
-
-  const predefinedSections = [
-    'Projects',
-    'Languages',
-    'Certifications',
-    'Awards',
-    'Publications',
-    'Volunteer Experience',
-  ];
 
   const handlePersonalInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, files } = e.target;
@@ -68,7 +61,7 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
       reader.onloadend = () => {
         setResumeData(prev => ({
           ...prev,
-          personalInfo: { ...prev.personalInfo, [name]: reader.result as string },
+          personalInfo: { ...prev.personalInfo, photoUrl: reader.result as string },
         }));
       };
       reader.readAsDataURL(files[0]);
@@ -88,12 +81,21 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setResumeData(prev => ({ ...prev, title: e.target.value }));
   };
 
+  const navigate = useNavigate();
+
   const handleGenerateSummaryAI = async () => {
     if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please sign in to use AI features.",
-        variant: "destructive"
+        title: "Sign In Required",
+        description: "Please sign in to use AI-powered features.",
+        action: (
+          <button
+            onClick={() => navigate('/settings')}
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            Add API Key
+          </button>
+        )
       });
       return;
     }
@@ -105,9 +107,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
   const handleDialogGenerate = async (data: SummaryGenerationData) => {
     if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please sign in to use AI features.",
-        variant: "destructive"
+        title: "Sign In Required",
+        description: "Please sign in to use AI-powered features."
       });
       return;
     }
@@ -115,23 +116,75 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
     setIsSummaryDialogOpen(false);
     try {
+      // Check credits and resolve API key
+      const profile = await getUserProfile(user);
+      const shouldUsePersonalKey = profile.usePersonalApiKey;
+      let apiKey = undefined;
+
+      if (shouldUsePersonalKey) {
+        apiKey = localStorage.getItem('gemini_api_key') || undefined;
+        if (!apiKey) {
+          toast({
+            title: "API Key Missing",
+            description: "Please add your Gemini API key in Settings.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          return;
+        }
+      } else {
+        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (profile.credits < 1) {
+          toast({
+            title: "Insufficient Credits",
+            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          return;
+        }
+      }
+
       const summary = await generateResumeSummary(
         data.jobTitle || resumeData.title,
         data.experience || resumeData.experience,
         resumeData.education,
         resumeData.skills,
         data.achievements,
-        data.tone
+        data.tone,
+        undefined,
+        apiKey
       );
+
+      // Deduct credit if successful and not using personal key
+      if (!shouldUsePersonalKey) {
+        await deductCredits(user.uid, 1);
+      }
+
       setResumeData(prev => ({ ...prev, summary }));
-      toast({ title: "Summary Generated", description: "AI analyzed your resume and generated a professional summary." });
+      toast({ title: "Summary Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
     } catch (error: any) {
       console.error("Error generating summary:", error);
-      const errorMessage = error?.message || "Please check your API key or try again.";
+      const errorMessage = error?.message || "Please check your API key.";
       toast({
-        title: "Generation Failed",
-        description: errorMessage,
-        variant: "destructive"
+        title: "Unable to Generate",
+        description: errorMessage
       });
     } finally {
       setIsGeneratingSummary(false);
@@ -153,9 +206,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     // Check if role and company are filled
     if (!exp.role || !exp.company) {
       toast({
-        title: "Missing Information",
-        description: "Please fill in the Role and Company fields before generating descriptions.",
-        variant: "destructive"
+        title: "Need More Details",
+        description: "Please fill in the Role and Company fields before generating descriptions."
       });
       return;
     }
@@ -164,23 +216,77 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
 
     try {
+      // Check credits and resolve API key
+      const profile = await getUserProfile(user);
+      const shouldUsePersonalKey = profile.usePersonalApiKey;
+      let apiKey = undefined;
+
+      if (shouldUsePersonalKey) {
+        apiKey = localStorage.getItem('gemini_api_key') || undefined;
+        if (!apiKey) {
+          toast({
+            title: "API Key Missing",
+            description: "Please add your Gemini API key in Settings.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          setActiveExperienceIndex(null);
+          return;
+        }
+      } else {
+        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (profile.credits < 1) {
+          toast({
+            title: "Insufficient Credits",
+            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          setActiveExperienceIndex(null);
+          return;
+        }
+      }
+
       const description = await generateExperienceDescription(
         exp.role,
         exp.company,
         exp.description || '',
         resumeData,
         exp.startDate,
-        exp.endDate
+        exp.endDate,
+        undefined,
+        apiKey
       );
+
+      // Deduct credit if successful and not using personal key
+      if (!shouldUsePersonalKey) {
+        await deductCredits(user.uid, 1);
+      }
 
       const newExperience = [...resumeData.experience];
       // If there's existing content, append; otherwise replace
       if (exp.description && exp.description.length > 10) {
         newExperience[index] = { ...newExperience[index], description };
-        toast({ title: "Experience Enhanced", description: "AI analyzed and improved your experience description." });
+        toast({ title: "Experience Enhanced", description: shouldUsePersonalKey ? "Enhanced using your API key." : "Enhanced successfully (1 credit used)." });
       } else {
         newExperience[index] = { ...newExperience[index], description };
-        toast({ title: "Experience Generated", description: "AI analyzed your role and generated professional bullet points." });
+        toast({ title: "Experience Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
       }
 
       setResumeData(prev => ({ ...prev, experience: newExperience }));
@@ -188,9 +294,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
       console.error("Error generating experience:", error);
       const errorMessage = error?.message || "Please check your API key.";
       toast({
-        title: "Generation Failed",
-        description: errorMessage,
-        variant: "destructive"
+        title: "Unable to Generate",
+        description: errorMessage
       });
     } finally {
       setIsGeneratingSummary(false);
@@ -239,6 +344,84 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
   const handleSkillsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const skillsArray = e.target.value.split(',').map(skill => skill.trim());
     setResumeData(prev => ({ ...prev, skills: skillsArray }));
+  };
+
+  const handleGenerateSkills = async (count: number) => {
+    if (!user) {
+      toast({
+        title: "Sign In Required",
+        description: "Please sign in to use AI-powered features."
+      });
+      return;
+    }
+
+    setIsGeneratingSummary(true);
+    try {
+      // Check credits and resolve API key
+      const profile = await getUserProfile(user);
+      const shouldUsePersonalKey = profile.usePersonalApiKey;
+      let apiKey = undefined;
+
+      if (shouldUsePersonalKey) {
+        apiKey = localStorage.getItem('gemini_api_key') || undefined;
+        if (!apiKey) {
+          toast({
+            title: "API Key Missing",
+            description: "Please add your Gemini API key in Settings.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          return;
+        }
+      } else {
+        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (profile.credits < 1) {
+          toast({
+            title: "Insufficient Credits",
+            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          return;
+        }
+      }
+
+      const skillsString = await generateContextAwareSkills(resumeData, count, undefined, apiKey);
+      const skills = skillsString.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+      // Deduct credit if successful and not using personal key
+      if (!shouldUsePersonalKey) {
+        await deductCredits(user.uid, 1);
+      }
+
+      setResumeData(prev => ({ ...prev, skills }));
+      toast({ title: "Skills Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
+    } catch (error: any) {
+      console.error("Error generating skills:", error);
+      const errorMessage = error?.message || "Please check your API key.";
+      toast({
+        title: "Unable to Generate",
+        description: errorMessage
+      });
+    } finally {
+      setIsGeneratingSummary(false);
+    }
   };
 
   const handleCustomSectionChange = (index: number, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -304,9 +487,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
   const handleGenerateCustomSectionContent = async (sectionIndex: number) => {
     if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please sign in to use AI features.",
-        variant: "destructive"
+        title: "Sign In Required",
+        description: "Please sign in to use AI-powered features."
       });
       return;
     }
@@ -318,13 +500,67 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
 
     try {
+      // Check credits and resolve API key
+      const profile = await getUserProfile(user);
+      const shouldUsePersonalKey = profile.usePersonalApiKey;
+      let apiKey = undefined;
+
+      if (shouldUsePersonalKey) {
+        apiKey = localStorage.getItem('gemini_api_key') || undefined;
+        if (!apiKey) {
+          toast({
+            title: "API Key Missing",
+            description: "Please add your Gemini API key in Settings.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          setActiveCustomSectionIndex(null);
+          return;
+        }
+      } else {
+        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (profile.credits < 1) {
+          toast({
+            title: "Insufficient Credits",
+            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          setActiveCustomSectionIndex(null);
+          return;
+        }
+      }
+
       const keywords = section.organization || section.content || '';
       const content = await generateCustomSectionContent(
         section.title || 'Custom Section',
         section.type || 'text',
         keywords,
-        resumeData
+        resumeData,
+        undefined,
+        apiKey
       );
+
+      // Deduct credit if successful and not using personal key
+      if (!shouldUsePersonalKey) {
+        await deductCredits(user.uid, 1);
+      }
 
       const newCustomSections = [...resumeData.customSections];
       if (section.type === 'text') {
@@ -348,14 +584,13 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
       }
 
       setResumeData(prev => ({ ...prev, customSections: newCustomSections }));
-      toast({ title: "Content Generated", description: "AI-generated content added successfully." });
+      toast({ title: "Content Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
     } catch (error: any) {
       console.error("Error generating custom section content:", error);
       const errorMessage = error?.message || "Please check your API key.";
       toast({
-        title: "Generation Failed",
-        description: errorMessage,
-        variant: "destructive"
+        title: "Unable to Generate",
+        description: errorMessage
       });
     } finally {
       setIsGeneratingSummary(false);
@@ -366,9 +601,8 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
   const handleGenerateCustomItemDescription = async (sectionIndex: number, itemIndex: number) => {
     if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please sign in to use AI features.",
-        variant: "destructive"
+        title: "Sign In Required",
+        description: "Please sign in to use AI-powered features."
       });
       return;
     }
@@ -381,13 +615,67 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsGeneratingSummary(true);
 
     try {
+      // Check credits and resolve API key
+      const profile = await getUserProfile(user);
+      const shouldUsePersonalKey = profile.usePersonalApiKey;
+      let apiKey = undefined;
+
+      if (shouldUsePersonalKey) {
+        apiKey = localStorage.getItem('gemini_api_key') || undefined;
+        if (!apiKey) {
+          toast({
+            title: "API Key Missing",
+            description: "Please add your Gemini API key in Settings.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          setActiveCustomItemIndex(null);
+          return;
+        }
+      } else {
+        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (profile.credits < 1) {
+          toast({
+            title: "Insufficient Credits",
+            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                Go to Settings
+              </button>
+            )
+          });
+          setIsGeneratingSummary(false);
+          setActiveCustomItemIndex(null);
+          return;
+        }
+      }
+
       const keywords = item.title || item.subtitle || item.description || '';
       const content = await generateCustomSectionContent(
         section.title || 'Custom Section',
         section.type || 'text',
         keywords,
-        resumeData
+        resumeData,
+        undefined,
+        apiKey
       );
+
+      // Deduct credit if successful and not using personal key
+      if (!shouldUsePersonalKey) {
+        await deductCredits(user.uid, 1);
+      }
 
       const newCustomSections = [...resumeData.customSections];
       const newItems = [...(section.items || [])];
@@ -395,14 +683,13 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
       newCustomSections[sectionIndex] = { ...section, items: newItems };
 
       setResumeData(prev => ({ ...prev, customSections: newCustomSections }));
-      toast({ title: "Description Generated", description: "AI-generated description added successfully." });
+      toast({ title: "Description Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
     } catch (error: any) {
       console.error("Error generating item description:", error);
       const errorMessage = error?.message || "Please check your API key.";
       toast({
-        title: "Generation Failed",
-        description: errorMessage,
-        variant: "destructive"
+        title: "Unable to Generate",
+        description: errorMessage
       });
     } finally {
       setIsGeneratingSummary(false);
@@ -793,203 +1080,144 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
                         </Card>
                       ))}
                       <Button variant="outline" size="sm" onClick={() => {
-                        const newItems = [...(section.items || []), { id: uuidv4(), title: '', subtitle: '', description: '' }];
+                        const newItems = [...(section.items || []), { id: uuidv4(), description: '', title: '', subtitle: '', startDate: '', endDate: '' }];
                         const newCustomSections = [...resumeData.customSections];
                         newCustomSections[index] = { ...newCustomSections[index], items: newItems };
                         setResumeData(prev => ({ ...prev, customSections: newCustomSections }));
                       }}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add Experience
                       </Button>
                     </div>
                   )}
-
                 </CardContent>
               </Card>
             ))
           )}
-
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full"><PlusCircle className="mr-2 h-4 w-4" /> Add Custom Section</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56">
+              <DropdownMenuItem onClick={() => handleAddCustomSection('Projects', 'experience')}>Projects</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAddCustomSection('Languages', 'list')}>Languages</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAddCustomSection('Certifications', 'experience')}>Certifications</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAddCustomSection('Awards', 'experience')}>Awards</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAddCustomSection('Publications', 'experience')}>Publications</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAddCustomSection('Volunteer Experience', 'experience')}>Volunteer Experience</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleAddCustomSection('Custom Section', 'text')}>Custom Text Section</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </AccordionContent>
       </AccordionItem>
     ),
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="relative w-full max-w-md mx-auto bg-muted p-1 rounded-full flex border border-foreground/20">
-        <span
-          className="absolute top-1 bottom-1 left-1 w-[calc(33.33%-4px)] bg-primary shadow-sm rounded-full transition-transform duration-300 ease-in-out"
-          style={{
-            transform: activeTab === 'content' ? 'translateX(0%)' : activeTab === 'design' ? 'translateX(100%)' : 'translateX(200%)',
-          }}
-        />
-        <button
-          onClick={() => setActiveTab('content')}
-          className={`relative z-10 w-1/3 py-2.5 rounded-full flex items-center justify-center transition-colors duration-300 text-sm font-medium ${activeTab === 'content' ? 'text-primary-foreground' : 'text-muted-foreground'
-            }`}
-        >
-          <FileText className="mr-2 h-4 w-4" />
-          Content
-        </button>
-        <button
-          onClick={() => setActiveTab('design')}
-          className={`relative z-10 w-1/3 py-2.5 rounded-full flex items-center justify-center transition-colors duration-300 text-sm font-medium ${activeTab === 'design' ? 'text-primary-foreground' : 'text-muted-foreground'
-            }`}
-        >
-          <Palette className="mr-2 h-4 w-4" />
-          Design
-        </button>
-        <button
-          onClick={() => setActiveTab('template')}
-          className={`relative z-10 w-1/3 py-2.5 rounded-full flex items-center justify-center transition-colors duration-300 text-sm font-medium ${activeTab === 'template' ? 'text-primary-foreground' : 'text-muted-foreground'
-            }`}
-        >
-          <LayoutTemplate className="mr-2 h-4 w-4" />
-          Template
-        </button>
+    <div className="h-full flex flex-col">
+      <div className="flex-none p-4 border-b bg-white z-10">
+        <div className="flex items-center justify-center space-x-2 bg-muted p-1 rounded-lg max-w-md mx-auto">
+          <Button
+            variant={activeTab === 'content' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('content')}
+            className="flex-1"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Content
+          </Button>
+          <Button
+            variant={activeTab === 'layout' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('layout')}
+            className="flex-1"
+          >
+            <LayoutTemplate className="w-4 h-4 mr-2" />
+            Layout
+          </Button>
+          <Button
+            variant={activeTab === 'style' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('style')}
+            className="flex-1"
+          >
+            <Palette className="w-4 h-4 mr-2" />
+            Style
+          </Button>
+        </div>
       </div>
 
-      {activeTab === 'design' ? (
-        <div className="space-y-8 p-2">
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Layout</h3>
+      <div className="flex-grow overflow-y-auto p-4 md:p-6 space-y-6 pb-32">
+        {activeTab === 'content' && (
+          <div className="space-y-6 max-w-3xl mx-auto">
+            <Card className="bg-card">
+              <CardHeader className="p-4"><CardTitle className="text-lg">Personal Information</CardTitle></CardHeader>
+              <CardContent className="p-4 pt-0 space-y-4">
+                <div className="flex items-center gap-4 mb-4">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={resumeData.personalInfo.photoUrl} />
+                    <AvatarFallback><User className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <Label htmlFor="photo-upload" className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2">
+                      Upload Photo
+                    </Label>
+                    <Input id="photo-upload" type="file" name="photo" accept="image/*" className="hidden" onChange={handlePersonalInfoChange} />
+                    {photoRequired && !resumeData.personalInfo.photoUrl && <p className="text-xs text-red-500 mt-1">Photo is required for this template</p>}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FloatingLabelInput id="fullName" name="name" label="Full Name" value={resumeData.personalInfo.name} onChange={handlePersonalInfoChange} icon={User} />
+                  <FloatingLabelInput id="jobTitle" name="title" label="Job Title" value={resumeData.title} onChange={handleTitleChange} icon={Briefcase} />
+                  <FloatingLabelInput id="email" name="email" label="Email" value={resumeData.personalInfo.email} onChange={handlePersonalInfoChange} icon={Mail} />
+                  <FloatingLabelInput id="phone" name="phone" label="Phone" value={resumeData.personalInfo.phone} onChange={handlePersonalInfoChange} icon={Phone} />
+                  <FloatingLabelInput id="location" name="address" label="Location" value={resumeData.personalInfo.address} onChange={handlePersonalInfoChange} icon={MapPin} />
+                  <FloatingLabelInput id="linkedin" name="linkedin" label="LinkedIn URL" value={resumeData.personalInfo.linkedin} onChange={handlePersonalInfoChange} icon={Linkedin} />
+                  <FloatingLabelInput id="website" name="github" label="Website / Portfolio" value={resumeData.personalInfo.github} onChange={handlePersonalInfoChange} icon={Github} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Accordion type="single" collapsible defaultValue="summary" className="w-full space-y-4">
+              {resumeData.layout.filter(item => item.enabled).map(item => (
+                <div key={item.id}>
+                  {sectionComponents[item.id as keyof typeof sectionComponents]}
+                </div>
+              ))}
+            </Accordion>
+          </div>
+        )}
+
+        {activeTab === 'layout' && (
+          <div className="max-w-3xl mx-auto">
             <LayoutEditor
               layout={resumeData.layout}
               onLayoutChange={handleLayoutChange}
               onToggleSection={toggleSection}
             />
           </div>
-          <Separator />
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Style</h3>
+        )}
+
+        {activeTab === 'style' && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            <TemplateSelector onSelectTemplate={onTemplateChange} />
+            <Separator />
             <StyleEditor styles={resumeStyle} setStyles={setResumeStyle} templateId={templateId} />
           </div>
-        </div>
-      ) : activeTab === 'template' ? (
-        <TemplateSelector onSelectTemplate={onTemplateChange} />
-      ) : (
-        <div className="w-full space-y-4">
-          <Card className="bg-card">
-            <CardHeader className="p-4">
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Briefcase className="h-5 w-5 text-primary" />
-                Job Role / Target Position
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <FloatingLabelInput
-                id="job-role"
-                name="title"
-                label="Job Role / Target Position"
-                value={resumeData.title || ''}
-                onChange={handleTitleChange}
-                icon={Briefcase}
-                placeholder="e.g. Senior Software Engineer, Product Manager"
-              />
-              <p className="text-xs text-muted-foreground mt-2 px-3">
-                This is the role you're applying for. It helps AI generate tailored content for your resume.
-              </p>
-            </CardContent>
-          </Card>
-          <Accordion type="single" collapsible defaultValue="personal-info" className="w-full space-y-4">
-            <AccordionItem value="personal-info" className="border-b-0">
-              <AccordionTrigger className="text-lg font-semibold p-4 bg-muted rounded-lg hover:no-underline border">Personal Information</AccordionTrigger>
-              <AccordionContent className="space-y-4 pt-6 px-2">
-                {photoRequired && (
-                  <div className="space-y-2">
-                    <Label htmlFor="photoUrl">Profile Photo</Label>
-                    <div className="flex items-center gap-4">
-                      <Avatar className="h-16 w-16">
-                        <AvatarImage src={resumeData.personalInfo.photoUrl || '/placeholder.svg'} alt={resumeData.personalInfo.name} />
-                        <AvatarFallback>{resumeData.personalInfo.name ? resumeData.personalInfo.name.slice(0, 2).toUpperCase() : 'JD'}</AvatarFallback>
-                      </Avatar>
-                      <Input id="photoUrl" name="photoUrl" type="file" accept="image/*" onChange={handlePersonalInfoChange} className="flex-grow" />
-                    </div>
-                  </div>
-                )}
-                <FloatingLabelInput id="name" name="name" label="Full Name" value={resumeData.personalInfo.name} onChange={handlePersonalInfoChange} icon={User} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FloatingLabelInput id="email" name="email" type="email" label="Email Address" value={resumeData.personalInfo.email} onChange={handlePersonalInfoChange} icon={Mail} />
-                  <FloatingLabelInput id="phone" name="phone" label="Phone Number" value={resumeData.personalInfo.phone} onChange={handlePersonalInfoChange} icon={Phone} />
-                </div>
-                <FloatingLabelInput id="address" name="address" label="Address" value={resumeData.personalInfo.address} onChange={handlePersonalInfoChange} icon={MapPin} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FloatingLabelInput id="linkedin" name="linkedin" label="LinkedIn Profile" value={resumeData.personalInfo.linkedin} onChange={handlePersonalInfoChange} icon={Linkedin} />
-                  <FloatingLabelInput id="github" name="github" label="GitHub Profile" value={resumeData.personalInfo.github} onChange={handlePersonalInfoChange} icon={Github} />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+        )}
+      </div>
 
-            {resumeData.layout.map(section => (
-              section.enabled && (
-                <React.Fragment key={section.id}>
-                  {sectionComponents[section.id as keyof typeof sectionComponents]}
-                </React.Fragment>
-              )
-            ))}
-          </Accordion>
-        </div>
-      )}
-
-      {activeTab === 'content' && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full mt-4">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Section
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-            {predefinedSections.map((title) => (
-              <DropdownMenuItem key={title} onClick={() => {
-                // Languages should be list type, others should be experience type
-                const type = title === 'Languages' ? 'list' : 'experience';
-                handleAddCustomSection(title, type);
-              }}>
-                {title}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      <SkillsGenerationDialog
-        open={isSkillsDialogOpen}
-        onOpenChange={setIsSkillsDialogOpen}
-        onGenerate={async (count) => {
-          if (!user) {
-            toast({
-              title: "Authentication Required",
-              description: "Please sign in to use AI features.",
-              variant: "destructive"
-            });
-            setIsSkillsDialogOpen(false);
-            return;
-          }
-
-          setIsGeneratingSummary(true);
-          try {
-            const skillsText = await generateContextAwareSkills(resumeData, count);
-            const skillsArray = skillsText.split(',').map(s => s.trim()).filter(s => s.length > 0);
-            setResumeData(prev => ({ ...prev, skills: [...(prev.skills || []), ...skillsArray] }));
-            toast({ title: "Skills Generated", description: `Added ${skillsArray.length} skills based on your profile.` });
-            setIsSkillsDialogOpen(false);
-          } catch (error: any) {
-            console.error("Error generating skills:", error);
-            const errorMessage = error?.message || "Please check your API key.";
-            toast({
-              title: "Generation Failed",
-              description: errorMessage,
-              variant: "destructive"
-            });
-          } finally {
-            setIsGeneratingSummary(false);
-          }
-        }}
-      />
       <SummaryGenerationDialog
         open={isSummaryDialogOpen}
         onOpenChange={setIsSummaryDialogOpen}
         onGenerate={handleDialogGenerate}
-        initialJobTitle={resumeData.title || ''}
-        initialExperience={resumeData.experience.length > 0 ? `${Math.max(1, Math.floor(resumeData.experience.length * 1.5))}+ years` : ''}
+        initialJobTitle={resumeData.title}
+      />
+
+      <SkillsGenerationDialog
+        open={isSkillsDialogOpen}
+        onOpenChange={setIsSkillsDialogOpen}
+        onGenerate={handleGenerateSkills}
       />
     </div>
   );

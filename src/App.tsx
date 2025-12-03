@@ -14,7 +14,6 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
-import Pricing from "./pages/Pricing";
 import ProtectedRoute from "./components/ProtectedRoute";
 import InterviewCoach from "./pages/InterviewCoach";
 import InterviewSetupPage from "./pages/InterviewSetupPage";
@@ -33,13 +32,13 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/editor/:resumeId" element={
             <ProtectedRoute>
               <Editor />
             </ProtectedRoute>
           } />
-          
+
           {/* Standalone Interview Session Route */}
           <Route path="/interview-session" element={
             <ProtectedRoute>
@@ -56,11 +55,11 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/templates" element={<Templates />} />
             <Route path="/settings" element={<Settings />} />
-            
+
             {/* Interview Setup inside Dashboard Layout */}
             <Route path="/dashboard/interview" element={<InterviewSetupPage />} />
 
-            <Route path="/dashboard/pricing" element={<Pricing />} />
+            <Route path="/dashboard/interview" element={<InterviewSetupPage />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

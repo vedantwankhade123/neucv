@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ResumeStyle } from '@/types/resume';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Eye, FileText, MessageCircle } from 'lucide-react';
+import { ArrowRight, Eye, FileText, MessageCircle, Key, Share2, Heart, LayoutTemplate } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { resumeTemplates } from '@/lib/resume-templates';
 import { cn } from '@/lib/utils';
 import { previewDataMap } from '@/data/previewData';
@@ -109,7 +110,49 @@ const Home = () => {
       <header className="bg-white border-b p-3 hidden md:block flex-shrink-0 no-print h-14">
         <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
           <h1 className="text-lg font-bold tracking-tight">Welcome, {user?.displayName || 'User'}</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'NeuCV - AI Resume Builder',
+                    text: 'Check out this amazing free AI Resume Builder!',
+                    url: window.location.origin
+                  }).catch(console.error);
+                } else {
+                  navigator.clipboard.writeText(window.location.origin);
+                }
+              }}
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Heart className="h-4 w-4 text-red-500" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
+                    <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="bg-white p-3 rounded-lg border">
+                      <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p className="font-semibold text-sm">Vedant Wankhade</p>
+                      <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <UserNav />
           </div>
         </div>
@@ -117,38 +160,78 @@ const Home = () => {
       <main className="flex-grow p-3 md:p-6 overflow-y-auto overflow-x-hidden w-full max-w-7xl mx-auto">
 
         <section className="mb-12">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold tracking-tight">Quick Actions</h2>
-            <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-              View All <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Quick Actions</h2>
+              <p className="text-muted-foreground mt-1">Get started with common tasks</p>
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Create New Resume Card */}
             <div
-              className="border-2 border-dashed rounded-2xl hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center gap-4 aspect-[3/2]"
+              className="group relative overflow-hidden rounded-2xl border bg-white p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
               onClick={() => navigate('/templates')}
             >
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <FileText className="w-8 h-8 text-primary" />
-              </div>
-              <div className="text-center">
-                <h3 className="font-semibold text-lg mb-1">Create Resume</h3>
-                <p className="text-sm text-muted-foreground">Build a professional resume</p>
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-primary/10 blur-2xl transition-all duration-300 group-hover:bg-primary/20" />
+              <div className="relative flex flex-col items-center text-center gap-4">
+                <div className="p-4 rounded-2xl bg-primary/10 text-primary group-hover:scale-110 transition-transform duration-300">
+                  <FileText className="h-8 w-8" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Create Resume</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Build a professional resume from scratch</p>
+                </div>
               </div>
             </div>
 
             {/* Interview Coach Card */}
             <div
-              className="border-2 border-dashed rounded-2xl hover:border-primary hover:bg-primary/5 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center gap-4 aspect-[3/2]"
+              className="group relative overflow-hidden rounded-2xl border bg-white p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
               onClick={() => navigate('/dashboard/interview')}
             >
-              <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <MessageCircle className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-purple-500/10 blur-2xl transition-all duration-300 group-hover:bg-purple-500/20" />
+              <div className="relative flex flex-col items-center text-center gap-4">
+                <div className="p-4 rounded-2xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 group-hover:scale-110 transition-transform duration-300">
+                  <MessageCircle className="h-8 w-8" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Interview Coach</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Practice with our AI interviewer</p>
+                </div>
               </div>
-              <div className="text-center">
-                <h3 className="font-semibold text-lg mb-1">Interview Coach</h3>
-                <p className="text-sm text-muted-foreground">Practice with AI interviewer</p>
+            </div>
+
+            {/* Browse Templates Card */}
+            <div
+              className="group relative overflow-hidden rounded-2xl border bg-white p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+              onClick={() => navigate('/templates')}
+            >
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-blue-500/10 blur-2xl transition-all duration-300 group-hover:bg-blue-500/20" />
+              <div className="relative flex flex-col items-center text-center gap-4">
+                <div className="p-4 rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300">
+                  <LayoutTemplate className="h-8 w-8" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Browse Templates</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Explore professional designs</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Add API Key Card */}
+            <div
+              className="group relative overflow-hidden rounded-2xl border bg-white p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+              onClick={() => navigate('/settings')}
+            >
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-amber-500/10 blur-2xl transition-all duration-300 group-hover:bg-amber-500/20" />
+              <div className="relative flex flex-col items-center text-center gap-4">
+                <div className="p-4 rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 group-hover:scale-110 transition-transform duration-300">
+                  <Key className="h-8 w-8" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">API Settings</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Manage your Gemini API key</p>
+                </div>
               </div>
             </div>
           </div>
@@ -195,7 +278,7 @@ const Home = () => {
 
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[2px] rounded-xl">
                         <div className="bg-white/10 p-4 rounded-full backdrop-blur-md border border-white/20 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                          <Eye className="h-8 w-8 text-white" />
+                          <Eye className="h-8 w-8" />
                         </div>
                       </div>
                     </div>
@@ -214,7 +297,7 @@ const Home = () => {
         templateId={previewingTemplateId}
         onSelectTemplate={handleSelectTemplate}
       />
-    </div>
+    </div >
   );
 };
 
