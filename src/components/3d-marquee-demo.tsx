@@ -31,21 +31,21 @@ export default function ThreeDMarqueeDemo() {
       const previewData = previewDataMap[id];
       if (!previewData) return null;
       return (
-          <div key={id} className="w-[280px] h-[396px] sm:w-[358px] sm:h-[506px]">
-            <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-                <div style={styleVariables}>
-                    <TemplateComponent resumeData={previewData} />
-                </div>
+        <div key={id} className="w-[280px] h-[396px] sm:w-[358px] sm:h-[506px]">
+          <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+            <div style={styleVariables}>
+              <TemplateComponent resumeData={previewData} />
             </div>
           </div>
+        </div>
       );
-  }).filter(Boolean);
+    }).filter(Boolean);
 
   // Duplicate the previews to ensure the marquee is well-populated
   const tripledPreviews = [...resumePreviews, ...resumePreviews, ...resumePreviews];
 
   return (
-    <div className="mx-4 lg:mx-auto my-10 max-w-7xl rounded-3xl bg-gray-950/5 p-2 ring-1 ring-neutral-700/10 dark:bg-neutral-800">
+    <div className="w-full px-[10px]">
       <ThreeDMarquee items={tripledPreviews} />
     </div>
   );

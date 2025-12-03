@@ -17,48 +17,49 @@ export const ThreeDMarquee = ({
     const start = colIndex * chunkSize;
     return items.slice(start, start + chunkSize);
   });
+
   return (
     <div
       className={cn(
-        "mx-auto block h-[600px] overflow-hidden rounded-2xl max-sm:h-100",
+        "mx-auto block h-[600px] overflow-hidden rounded-2xl max-sm:h-100 relative bg-slate-50/50",
         className,
       )}
     >
-      <div className="flex size-full items-center justify-center">
+      {/* Gradient Fade Masks */}
+      <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-white via-white/80 to-transparent z-20 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-white via-white/80 to-transparent z-20 pointer-events-none" />
+
+      <div className="flex size-full items-center justify-center py-20">
         <div className="size-[1720px] shrink-0 scale-50 sm:scale-75 lg:scale-100">
           <div
             style={{
-              transform: "rotateX(55deg) rotateY(0deg) rotateZ(-45deg)",
+              transform: "rotateX(20deg) rotateY(-10deg) rotateZ(10deg)",
             }}
-            className="relative top-96 right-[50%] grid size-full origin-top-left grid-cols-4 gap-20 [transform-style:preserve-3d]"
+            className="relative top-20 left-0 grid size-full origin-center grid-cols-4 gap-4 [transform-style:preserve-3d]"
           >
             {chunks.map((subarray, colIndex) => (
               <motion.div
-                animate={{ y: colIndex % 2 === 0 ? 100 : -100 }}
+                animate={{
+                  y: colIndex % 2 === 0 ? ["-5%", "-35%"] : ["-35%", "-5%"]
+                }}
                 transition={{
-                  duration: colIndex % 2 === 0 ? 10 : 15,
+                  duration: 45,
                   repeat: Infinity,
                   repeatType: "reverse",
+                  ease: "linear",
                 }}
                 key={colIndex + "marquee"}
-                className="flex flex-col items-start gap-20"
+                className="flex flex-col items-center gap-6"
               >
-                <GridLineVertical className="-left-4" offset="80px" />
                 {subarray.map((item, itemIndex) => (
-                  <motion.div
-                    whileHover={{
-                      y: -10,
-                    }}
-                    transition={{
-                      duration: 0.3,
-                      ease: "easeInOut",
-                    }}
+                  <div
                     key={itemIndex}
                     className="relative"
                   >
-                    <GridLineHorizontal className="-top-4" offset="20px" />
-                    {item}
-                  </motion.div>
+                    <div className="relative rounded-xl overflow-hidden shadow-lg bg-white">
+                      {item}
+                    </div>
+                  </div>
                 ))}
               </motion.div>
             ))}
@@ -66,75 +67,5 @@ export const ThreeDMarquee = ({
         </div>
       </div>
     </div>
-  );
-};
-
-const GridLineHorizontal = ({
-  className,
-  offset,
-}: {
-  className?: string;
-  offset?: string;
-}) => {
-  return (
-    <div
-      style={
-        {
-          "--background": "#ffffff",
-          "--color": "rgba(0, 0, 0, 0.2)",
-          "--height": "1px",
-          "--width": "5px",
-          "--fade-stop": "90%",
-          "--offset": offset || "200px", //-100px if you want to keep the line inside
-          "--color-dark": "rgba(255, 255, 255, 0.2)",
-          maskComposite: "exclude",
-        } as React.CSSProperties
-      }
-      className={cn(
-        "absolute left-[calc(var(--offset)/2*-1)] h-[var(--height)] w-[calc(100%+var(--offset))]",
-        "bg-[linear-gradient(to_right,var(--color),var(--color)_50%,transparent_0,transparent)]",
-        "[background-size:var(--width)_var(--height)]",
-        "[mask:linear-gradient(to_left,var(--background)_var(--fade-stop),transparent),_linear_gradient(to_right,var(--background)_var(--fade-stop),transparent),_linear_gradient(black,black)]",
-        "[mask-composite:exclude]",
-        "z-30",
-        "dark:bg-[linear-gradient(to_right,var(--color-dark),var(--color-dark)_50%,transparent_0,transparent)]",
-        className,
-      )}
-    ></div>
-  );
-};
-
-const GridLineVertical = ({
-  className,
-  offset,
-}: {
-  className?: string;
-  offset?: string;
-}) => {
-  return (
-    <div
-      style={
-        {
-          "--background": "#ffffff",
-          "--color": "rgba(0, 0, 0, 0.2)",
-          "--height": "5px",
-          "--width": "1px",
-          "--fade-stop": "90%",
-          "--offset": offset || "150px", //-100px if you want to keep the line inside
-          "--color-dark": "rgba(255, 255, 255, 0.2)",
-          maskComposite: "exclude",
-        } as React.CSSProperties
-      }
-      className={cn(
-        "absolute top-[calc(var(--offset)/2*-1)] h-[calc(100%+var(--offset))] w-[var(--width)]",
-        "bg-[linear-gradient(to_bottom,var(--color),var(--color)_50%,transparent_0,transparent)]",
-        "[background-size:var(--width)_var(--height)]",
-        "[mask:linear-gradient(to_top,var(--background)_var(--fade-stop),transparent),_linear_gradient(to_bottom,var(--background)_var(--fade-stop),transparent),_linear_gradient(black,black)]",
-        "[mask-composite:exclude]",
-        "z-30",
-        "dark:bg-[linear-gradient(to_bottom,var(--color-dark),var(--color-dark)_50%,transparent_0,transparent)]",
-        className,
-      )}
-    ></div>
   );
 };
