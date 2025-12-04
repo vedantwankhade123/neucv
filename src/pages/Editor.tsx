@@ -376,7 +376,7 @@ const Editor = () => {
         resumeStyle={resumeStyle}
       />
 
-      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, overflow: 'hidden' }}>
         <div ref={downloadResumeRef} style={styleVariables}>
           <TemplateComponent resumeData={resumeData} />
         </div>

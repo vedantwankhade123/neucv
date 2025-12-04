@@ -193,7 +193,7 @@ const PreviewModal = ({ isOpen, onClose, resumeData, templateId, resumeStyle }: 
                   }}
                   className="transition-transform duration-200 ease-in-out"
                 >
-                  <div ref={downloadResumeRef} style={styleVariables}>
+                  <div style={styleVariables}>
                     <TemplateComponent resumeData={resumeData} />
                   </div>
                 </div>
@@ -248,6 +248,13 @@ const PreviewModal = ({ isOpen, onClose, resumeData, templateId, resumeStyle }: 
           </div>
         </div>
       </DialogContent>
+
+      {/* Hidden container for download capture */}
+      <div style={{ position: 'fixed', left: '-9999px', top: 0, overflow: 'hidden' }}>
+        <div ref={downloadResumeRef} style={styleVariables}>
+          <TemplateComponent resumeData={resumeData} />
+        </div>
+      </div>
     </Dialog>
   );
 };
