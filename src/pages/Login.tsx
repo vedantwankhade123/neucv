@@ -16,7 +16,7 @@ const Login = () => {
 
     useEffect(() => {
         if (user && !loading) {
-            navigate('/dashboard');
+            navigate('/home');
         }
     }, [user, loading, navigate]);
 
@@ -37,7 +37,7 @@ const Login = () => {
 
         try {
             await logInWithEmailAndPassword(email, password);
-            navigate('/dashboard');
+            navigate('/home');
         } catch (err: any) {
             console.error('Login error:', err);
             let message = 'Failed to sign in. Please try again.';
@@ -71,7 +71,7 @@ const Login = () => {
         try {
             setIsLoading(true);
             await signInWithGoogle();
-            navigate('/dashboard');
+            navigate('/home');
         } catch (error) {
             console.error('Failed to sign in with Google:', error);
         } finally {

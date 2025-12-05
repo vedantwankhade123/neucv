@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { deleteAllResumes, getResumes } from '@/lib/resume-storage';
 import { showError, showSuccess } from '@/utils/toast';
 import { UserNav } from '@/components/UserNav';
-import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, Globe, Timer, Share2, FileText, MessageCircle, Heart, Zap } from 'lucide-react';
+import { Database, HelpCircle, Upload, Download, Trash2, Github, Save, Mic, Volume2, Globe, Timer, Share2, FileText, MessageCircle, Heart, Zap, ShieldAlert } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AutoSaveToggle } from '../components/AutoSaveToggle';
@@ -32,7 +32,9 @@ import {
 
 import { auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { getUserProfile, addCredits, togglePersonalApiKeyPreference } from '@/lib/user-service';
+import { deleteUser } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
+import { getUserProfile, addCredits, togglePersonalApiKeyPreference, deleteUserAccount } from '@/lib/user-service';
 import { Sparkles, CreditCard } from 'lucide-react';
 import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
 import { Key, QrCode } from 'lucide-react';
@@ -43,7 +45,10 @@ import { CreditTransaction } from '@/types/user';
 
 const Settings = () => {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [user, loading] = useAuthState(auth);
+  const navigate = useNavigate();
 
   // Settings state
   const [interviewSettings, setInterviewSettings] = useState({
@@ -212,6 +217,39 @@ const Settings = () => {
 
   // Using standard shadcn card classes
   const cardClasses = "shadow-sm";
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setIsDeletingAccount(true);
+    try {
+      // Clear local data
+      deleteAllResumes();
+      localStorage.removeItem('gemini_api_key');
+      localStorage.removeItem('always_use_personal_key');
+      const welcomeKey = `welcomeCreditsShown:${user.uid}`;
+      localStorage.removeItem(welcomeKey);
+
+      // Remove Firestore profile
+      await deleteUserAccount(user.uid);
+
+      // Remove auth user
+      if (auth.currentUser) {
+        await deleteUser(auth.currentUser);
+      }
+
+      showSuccess("Account deleted. We're signing you out.");
+      setTimeout(() => {
+        navigate('/');
+        window.location.reload();
+      }, 800);
+    } catch (error: any) {
+      console.error('Failed to delete account', error);
+      showError(error?.message || "Failed to delete account. Please re-authenticate and try again.");
+    } finally {
+      setIsDeletingAccount(false);
+      setIsDeleteAccountOpen(false);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-full bg-slate-50">
@@ -676,7 +714,7 @@ const Settings = () => {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t">
+                <div className="pt-4 border-t space-y-3">
                   <div className="flex items-center justify-between p-4 border border-destructive/20 bg-destructive/5 rounded-xl">
                     <div>
                       <h4 className="font-medium text-destructive">Danger Zone</h4>
@@ -685,6 +723,20 @@ const Settings = () => {
                     <Button variant="destructive" size="sm" onClick={() => setIsAlertOpen(true)}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete All
+                    </Button>
+                  </div>
+                  <div className="p-4 border border-destructive/30 bg-white rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-full bg-destructive/10 text-destructive">
+                        <ShieldAlert className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-destructive">Delete account permanently</h4>
+                        <p className="text-sm text-muted-foreground">Remove your account, profile, and local data. This cannot be undone.</p>
+                      </div>
+                    </div>
+                    <Button variant="destructive" onClick={() => setIsDeleteAccountOpen(true)} disabled={isDeletingAccount}>
+                      {isDeletingAccount ? "Deleting..." : "Delete Account"}
                     </Button>
                   </div>
                 </div>
@@ -725,6 +777,27 @@ const Settings = () => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Yes, delete everything
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDeleteAccountOpen} onOpenChange={setIsDeleteAccountOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete your account, profile, and local data. You may need to re-authenticate to confirm this action.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAccount}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeletingAccount}
+            >
+              {isDeletingAccount ? "Deleting..." : "Yes, delete my account"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

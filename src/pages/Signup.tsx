@@ -17,7 +17,7 @@ const Signup = () => {
 
     useEffect(() => {
         if (user && !loading) {
-            navigate('/dashboard');
+            navigate('/home');
         }
     }, [user, loading, navigate]);
 
@@ -51,7 +51,7 @@ const Signup = () => {
                 });
                 await incrementUserCount();
             }
-            navigate('/dashboard');
+            navigate('/home');
         } catch (err: any) {
             console.error('Signup error:', err);
             let message = 'Failed to create account. Please try again.';
@@ -83,7 +83,7 @@ const Signup = () => {
             // Note: We might want to increment user count for Google signups too, 
             // but it's harder to distinguish new vs returning users without checking DB.
             // For now, we'll leave it as is or could check if user creation time is recent.
-            navigate('/dashboard');
+            navigate('/home');
         } catch (error) {
             console.error('Failed to sign in with Google:', error);
         } finally {

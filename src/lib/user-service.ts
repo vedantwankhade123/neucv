@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, getDoc, setDoc, updateDoc, increment, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, runTransaction, deleteDoc } from 'firebase/firestore';
 import { UserProfile, CreditTransaction } from '@/types/user';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -144,4 +144,9 @@ export const addTemplateCredits = async (uid: string, amount: number) => {
 export const togglePersonalApiKeyPreference = async (uid: string, usePersonal: boolean) => {
     const userRef = doc(db, USERS_COLLECTION, uid);
     await updateDoc(userRef, { usePersonalApiKey: usePersonal });
+};
+
+export const deleteUserAccount = async (uid: string) => {
+    const userRef = doc(db, USERS_COLLECTION, uid);
+    await deleteDoc(userRef);
 };

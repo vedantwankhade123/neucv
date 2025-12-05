@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InterviewSetup } from '@/components/InterviewSetup';
-import { InterviewSetupData, InterviewQuestion, InterviewData } from '@/types/interview';
+import { InterviewSetupData, InterviewQuestion, InterviewData, InterviewLanguage } from '@/types/interview';
 import { generateInterviewQuestions } from '@/lib/gemini';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -10,30 +10,97 @@ import { Loader2, Share2, Heart } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card } from '@/components/ui/card';
 import { UserNav } from '@/components/UserNav';
+import { getUserProfile, deductCredits } from '@/lib/user-service';
+import { InsufficientCreditsDialog } from '@/components/InsufficientCreditsDialog';
 
 const InterviewSetupPage = () => {
     const navigate = useNavigate();
     const [user] = useAuthState(auth);
     const { toast } = useToast();
     const [isGenerating, setIsGenerating] = useState(false);
+    const [showCreditsDialog, setShowCreditsDialog] = useState(false);
+    const [userCredits, setUserCredits] = useState<number | null>(null);
+    const [nextResetDate, setNextResetDate] = useState<string>('');
 
-    const handleSetupComplete = async (setupData: InterviewSetupData) => {
+    const REQUIRED_CREDITS = 5;
+
+    useEffect(() => {
+        if (user) {
+            getUserProfile(user).then(profile => {
+                setUserCredits(profile.credits);
+                const lastReset = profile.lastCreditReset || profile.createdAt;
+                const nextReset = new Date(lastReset + (30 * 24 * 60 * 60 * 1000));
+                setNextResetDate(nextReset.toLocaleDateString());
+            });
+        }
+    }, [user]);
+
+    const checkCreditsAndStart = async (setupData: InterviewSetupData) => {
+        if (!user) {
+            toast({
+                title: 'Authentication Required',
+                description: 'Please sign in to start an interview.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        // Check if user has personal API key enabled
+        const profile = await getUserProfile(user);
+        const hasPersonalApiKey = profile.usePersonalApiKey && !!localStorage.getItem('gemini_api_key');
+
+        // If using personal API key, skip credit check
+        if (hasPersonalApiKey) {
+            await startInterview(setupData);
+            return;
+        }
+
+        // Check credits
+        if (profile.credits < REQUIRED_CREDITS) {
+            setShowCreditsDialog(true);
+            return;
+        }
+
+        // Deduct credits immediately when starting the interview
+        const didDeduct = await deductCredits(user.uid, REQUIRED_CREDITS);
+        if (!didDeduct) {
+            toast({
+                title: 'Unable to Deduct Credits',
+                description: 'Please try again or check your balance.',
+                variant: 'destructive'
+            });
+            return;
+        }
+        setUserCredits((prev) => (prev !== null ? prev - REQUIRED_CREDITS : prev));
+
+        // Credits deducted, start interview
+        await startInterview(setupData);
+    };
+
+    const startInterview = async (setupData: InterviewSetupData) => {
         setIsGenerating(true);
 
         try {
+            // Ensure language is always 'english' if not set or invalid
+            const validLanguages: InterviewLanguage[] = ['english', 'hinglish', 'marathi', 'hindi'];
+            const finalLanguage: InterviewLanguage = validLanguages.includes(setupData.language) ? setupData.language : 'english';
+
             // Generate AI questions
             const questions: InterviewQuestion[] = await generateInterviewQuestions(
                 setupData.resumeText,
                 setupData.jobRole,
                 setupData.numQuestions,
-                setupData.language
+                finalLanguage
             );
 
-            // Initialize interview data
+            // Initialize interview data with validated language
             const newInterviewData: InterviewData = {
                 id: `interview-${Date.now()}`,
                 userId: user?.uid,
-                setupData,
+                setupData: {
+                    ...setupData,
+                    language: finalLanguage
+                },
                 questions,
                 responses: [],
                 startTime: Date.now(),
@@ -57,6 +124,10 @@ const InterviewSetupPage = () => {
             });
             setIsGenerating(false);
         }
+    };
+
+    const handleSetupComplete = async (setupData: InterviewSetupData) => {
+        await checkCreditsAndStart(setupData);
     };
 
     if (isGenerating) {
@@ -190,6 +261,14 @@ const InterviewSetupPage = () => {
                     onCancel={() => navigate('/dashboard')}
                 />
             </main>
+
+            <InsufficientCreditsDialog
+                open={showCreditsDialog}
+                onOpenChange={setShowCreditsDialog}
+                currentCredits={userCredits || 0}
+                requiredCredits={REQUIRED_CREDITS}
+                nextResetDate={nextResetDate}
+            />
         </div>
     );
 };

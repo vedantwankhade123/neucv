@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ResumeStyle } from '@/types/resume';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Eye, FileText, MessageCircle, Key, Share2, Heart, LayoutTemplate } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowRight, Eye, FileText, MessageCircle, Key, Share2, Heart, LayoutTemplate, Gift, Sparkles, AlertTriangle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { resumeTemplates } from '@/lib/resume-templates';
 import { cn } from '@/lib/utils';
@@ -12,6 +13,7 @@ import { TemplatePreview } from '@/components/TemplatePreview';
 import TemplatePreviewModal from '@/components/TemplatePreviewModal';
 import { auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
+import { getUserProfile } from '@/lib/user-service';
 
 const backgroundColors = [
   'bg-slate-50 dark:bg-slate-900/20',
@@ -23,11 +25,67 @@ const backgroundColors = [
 const Home = () => {
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
+  const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
+  const [welcomeStorageKey, setWelcomeStorageKey] = useState<string | null>(null);
+  const [userCredits, setUserCredits] = useState<number | null>(null);
+  const [lowCreditThreshold, setLowCreditThreshold] = useState<number | null>(null);
+  const [showLowCreditDialog, setShowLowCreditDialog] = useState(false);
   const [previewingTemplateId, setPreviewingTemplateId] = useState<string | null>(null);
   const [isCreatingResume, setIsCreatingResume] = useState(false);
   const [isJobRoleDialogOpen, setIsJobRoleDialogOpen] = useState(false);
   const [selectedTemplateForJobRole, setSelectedTemplateForJobRole] = useState<string | null>(null);
   const [selectedStylesForJobRole, setSelectedStylesForJobRole] = useState<ResumeStyle | undefined>(undefined);
+
+  const WELCOME_CREDITS = 25;
+
+  useEffect(() => {
+    if (!user) return;
+    const key = `welcomeCreditsShown:${user.uid}`;
+    setWelcomeStorageKey(key);
+
+    if (localStorage.getItem(key)) return;
+
+    const timer = setTimeout(() => {
+      setShowWelcomeDialog(true);
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [user]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchProfile = async () => {
+      if (!user) return;
+      try {
+        const profile = await getUserProfile(user);
+        if (!isMounted) return;
+        setUserCredits(profile.credits);
+
+        // low credit reminders: show once per threshold per user
+        const thresholds = [5, 10]; // check from lowest to higher
+        for (const t of thresholds) {
+          const key = `creditReminderShown:${user.uid}:${t}`;
+          if (profile.credits <= t && !localStorage.getItem(key)) {
+            localStorage.setItem(key, 'true');
+            setLowCreditThreshold(t);
+            setShowLowCreditDialog(true);
+            break;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load profile for credits', e);
+      }
+    };
+    fetchProfile();
+    return () => { isMounted = false; };
+  }, [user]);
+
+  const dismissWelcomeDialog = () => {
+    if (welcomeStorageKey) {
+      localStorage.setItem(welcomeStorageKey, 'true');
+    }
+    setShowWelcomeDialog(false);
+  };
 
   const handleSelectTemplate = async (templateId: string, styles?: ResumeStyle) => {
     if (!user) {
@@ -297,6 +355,76 @@ const Home = () => {
         templateId={previewingTemplateId}
         onSelectTemplate={handleSelectTemplate}
       />
+
+      <Dialog
+        open={showWelcomeDialog}
+        onOpenChange={(open) => {
+          if (!open) dismissWelcomeDialog();
+        }}
+      >
+        <DialogContent className="max-w-md overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute -top-10 left-4 h-24 w-24 rounded-full bg-orange-400/30 blur-2xl animate-ping" />
+            <div className="absolute top-6 right-6 h-16 w-16 rounded-full bg-amber-300/30 blur-xl animate-ping" />
+            <div className="absolute bottom-4 left-10 h-20 w-20 rounded-full bg-primary/15 blur-2xl animate-ping" />
+          </div>
+
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-50/80 via-white to-amber-50/70 pointer-events-none" />
+
+          <DialogHeader className="relative z-10">
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Gift className="h-5 w-5 text-primary" />
+              Welcome to NeuCV!
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-700">
+              You’ve received <span className="font-semibold text-primary">{WELCOME_CREDITS} free credits</span> to start your interview prep and resume building.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative z-10 rounded-xl border border-dashed border-primary/30 bg-white/70 backdrop-blur p-4 flex items-start gap-3 shadow-sm">
+            <Sparkles className="h-4 w-4 text-primary mt-0.5 animate-spin-slow" />
+            <p className="text-sm text-slate-700 leading-relaxed">
+              Use them for interview coaching, resume improvements, and more. We’ll remind you before credits run low.
+            </p>
+          </div>
+
+          <div className="relative z-10 mt-3 text-sm text-slate-600">
+            Tip: Add your API key in Settings to save credits for reports.
+          </div>
+
+          <DialogFooter className="relative z-10 mt-5">
+            <Button onClick={dismissWelcomeDialog} className="w-full sm:w-auto">Celebrate & Continue</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showLowCreditDialog}
+        onOpenChange={(open) => setShowLowCreditDialog(open)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Low Credits
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-700">
+              {lowCreditThreshold ? `You’re below ${lowCreditThreshold} credits.` : 'Your credits are running low.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            Add your own API key in Settings to save credits for reports, or top up to continue using premium features.
+          </div>
+          <DialogFooter className="mt-4 flex flex-col sm:flex-row sm:justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowLowCreditDialog(false)} className="w-full sm:w-auto">
+              Later
+            </Button>
+            <Button onClick={() => { setShowLowCreditDialog(false); navigate('/settings'); }} className="w-full sm:w-auto">
+              Manage Credits
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 };

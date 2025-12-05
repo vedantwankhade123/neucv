@@ -35,7 +35,7 @@ import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
 
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
-import { getUserProfile, deductCredits } from '@/lib/user-service';
+import { getUserProfile } from '@/lib/user-service';
 
 // --- Type Definitions for Web Speech API ---
 interface SpeechRecognition extends EventTarget {
@@ -149,6 +149,7 @@ const InterviewCoach = () => {
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState(0);
     const [user] = useAuthState(auth);
+    const questionScrollRef = useRef<HTMLDivElement>(null);
 
     const inputModeRef = useRef(inputMode);
     useEffect(() => { inputModeRef.current = inputMode; }, [inputMode]);
@@ -160,6 +161,7 @@ const InterviewCoach = () => {
     };
 
     // --- Voice Selection Logic ---
+    // Force English TTS voice across browsers regardless of selected interview language.
     const initVoice = useCallback((targetLanguage: InterviewLanguage) => {
         if (!window.speechSynthesis) return;
 
@@ -168,33 +170,15 @@ const InterviewCoach = () => {
 
         let preferredVoice: SpeechSynthesisVoice | undefined;
 
-        // Logic to select the best voice based on language
-        // We prioritize "Microsoft" or "Google" voices as they usually sound better
-
-        if (targetLanguage === 'hindi') {
-            // Try to find a Hindi voice
-            preferredVoice = voices.find(v => v.lang === 'hi-IN' && (v.name.includes("Google") || v.name.includes("Microsoft")));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'hi-IN');
-        }
-        else if (targetLanguage === 'marathi') {
-            // Try to find a Marathi voice
-            preferredVoice = voices.find(v => v.lang === 'mr-IN' && (v.name.includes("Google") || v.name.includes("Microsoft")));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'mr-IN');
-            // Fallback to Hindi if Marathi not found, as accents are closer than English
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'hi-IN');
-        }
-        else if (targetLanguage === 'hinglish') {
-            // For Hinglish, English (India) is often the best compromise for Roman script
-            preferredVoice = voices.find(v => v.lang === 'en-IN' && (v.name.includes("Microsoft") || v.name.includes("Google")));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'en-IN');
-        }
-        else {
-            // English (Default) - Prioritize Natural/Online voices
-            preferredVoice = voices.find(v => v.name.includes("Microsoft") && v.name.includes("Online") && v.name.includes("Natural"));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.name.includes("Google US English"));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.name.includes("Natural") && v.lang.startsWith("en"));
-            if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'en-US');
-        }
+        // Always pick an English voice, prioritizing higher-quality providers
+        preferredVoice = voices.find(v =>
+            v.name.includes("Microsoft") && v.name.includes("Online") && v.name.includes("Natural") && v.lang.startsWith("en")
+        );
+        if (!preferredVoice) preferredVoice = voices.find(v => v.name.includes("Google US English"));
+        if (!preferredVoice) preferredVoice = voices.find(v => v.name.includes("Microsoft") && v.lang.startsWith("en"));
+        if (!preferredVoice) preferredVoice = voices.find(v => v.name.includes("Google") && v.lang.startsWith("en"));
+        if (!preferredVoice) preferredVoice = voices.find(v => v.lang === 'en-US');
+        if (!preferredVoice) preferredVoice = voices.find(v => v.lang.startsWith('en'));
 
         // Ultimate fallback
         if (!preferredVoice && voices.length > 0) {
@@ -202,7 +186,7 @@ const InterviewCoach = () => {
         }
 
         if (preferredVoice) {
-            console.log(`Selected Voice for ${targetLanguage}:`, preferredVoice.name, preferredVoice.lang);
+            console.log(`Selected Voice (forced English) for ${targetLanguage}:`, preferredVoice.name, preferredVoice.lang);
             selectedVoiceRef.current = preferredVoice;
         }
     }, []);
@@ -647,6 +631,13 @@ const InterviewCoach = () => {
         };
     }, [currentQuestionId, phase]);
 
+    // Auto-scroll question container during typing animation
+    useEffect(() => {
+        if (questionScrollRef.current) {
+            questionScrollRef.current.scrollTop = questionScrollRef.current.scrollHeight;
+        }
+    }, [displayedQuestion, isTyping]);
+
     const toggleListening = () => {
         if (isListening) stopListening();
         else startListening();
@@ -764,19 +755,6 @@ const InterviewCoach = () => {
                     }
                 } else {
                     apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-                    if (profile.credits < 5) {
-                        toast.error("Insufficient Credits", {
-                            description: "You need 5 credits to generate the interview report. Please add your own API key in Settings.",
-                            action: {
-                                label: "Settings",
-                                onClick: () => navigate('/settings')
-                            }
-                        });
-                        setIsGeneratingReport(false);
-                        return;
-                    }
-                    // Deduct 5 credits for interview
-                    await deductCredits(user.uid, 5);
                 }
             }
 
@@ -921,27 +899,33 @@ const InterviewCoach = () => {
     return (
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
-            <header className="h-16 border-b px-4 lg:px-6 flex items-center justify-between bg-white z-20 shadow-sm relative">
-                <div className="flex items-center gap-4 min-w-[200px]">
-                    <Button variant="ghost" size="icon" onClick={handleExitClick} title="Back to Dashboard" className="hover:bg-slate-100">
-                        <Home className="h-5 w-5 text-slate-500" />
+            <header className="h-14 sm:h-16 border-b px-3 sm:px-4 lg:px-6 flex items-center justify-between bg-white z-20 shadow-sm relative">
+                <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 sm:flex-none sm:min-w-[200px]">
+                    <Button variant="ghost" size="icon" onClick={handleExitClick} title="Back to Dashboard" className="hover:bg-slate-100 h-8 w-8 sm:h-10 sm:w-10">
+                        <Home className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500" />
                     </Button>
-                    <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/10">
-                            <Bot className="h-5 w-5 text-primary" />
+                    <div className="w-px h-6 sm:h-8 bg-slate-200 hidden sm:block"></div>
+                    <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                        <div className="w-7 h-7 sm:w-9 sm:h-9 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/10 flex-shrink-0">
+                            <Bot className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                         </div>
-                        <div className="hidden sm:block">
+                        <div className="hidden sm:block min-w-0">
                             <h1 className="text-sm font-bold text-slate-900 leading-none">AI Coach</h1>
                             <p className="text-[10px] text-muted-foreground font-medium mt-0.5 max-w-[150px] truncate">
                                 {interviewData!.setupData.jobRole}
                             </p>
                         </div>
+                        {/* Mobile: Show question progress */}
+                        <div className="sm:hidden flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-900">
+                                Q{currentQuestionIndex + 1}/{interviewData?.questions.length}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
                 {/* Center: Progress Bar */}
-                <div className="flex-1 max-w-md mx-4 hidden md:flex flex-col gap-1.5 justify-center">
+                <div className="flex-1 max-w-md mx-2 sm:mx-4 hidden md:flex flex-col gap-1.5 justify-center">
                     <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                         <span>Question {currentQuestionIndex + 1}</span>
                         <span>{interviewData?.questions.length} Total</span>
@@ -950,18 +934,40 @@ const InterviewCoach = () => {
                 </div>
 
                 {/* Right Side: Timer & Controls */}
-                <div className="flex items-center gap-3 min-w-[200px] justify-end">
-                    <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
-                        <Clock className="h-3.5 w-3.5 text-slate-500" />
-                        <span className="text-xs font-mono font-medium text-slate-700">
+                <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 sm:min-w-[200px] justify-end">
+                    <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-slate-200">
+                        <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-500 flex-shrink-0" />
+                        <span className="text-[10px] sm:text-xs font-mono font-medium text-slate-700 whitespace-nowrap">
                             {formatTime(remainingSeconds)}
                         </span>
                     </div>
 
+                    {/* Mobile: Pro Tip quick access */}
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900">
-                                <Settings className="h-5 w-5" />
+                            <Button variant="ghost" size="icon" className="sm:hidden h-8 w-8 text-primary hover:text-primary/80">
+                                <Sparkles className="h-4 w-4" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-72 p-4 shadow-xl border-slate-200">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                                    <Sparkles className="h-4 w-4" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-semibold text-slate-900">Pro Tip</h4>
+                                    <p className="text-sm text-slate-600 leading-snug">
+                                        Use the STAR method (Situation, Task, Action, Result) to structure your answers effectively.
+                                    </p>
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900 h-8 w-8 sm:h-10 sm:w-10">
+                                <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-72 p-4 mr-4 shadow-xl border-slate-200">
@@ -980,21 +986,21 @@ const InterviewCoach = () => {
                         variant="destructive"
                         size="sm"
                         onClick={handleFinishClick}
-                        className="h-9 px-3 sm:px-4 text-xs gap-2 shadow-sm hover:shadow transition-all"
+                        className="h-8 sm:h-9 px-2 sm:px-3 lg:px-4 text-[10px] sm:text-xs gap-1 sm:gap-2 shadow-sm hover:shadow transition-all"
                     >
-                        <Square className="h-3 w-3 fill-current" />
+                        <Square className="h-2.5 w-2.5 sm:h-3 sm:w-3 fill-current" />
                         <span className="hidden sm:inline">Finish</span>
                     </Button>
                 </div>
             </header>
 
             {/* Main Workspace - Full Width */}
-            <main className="flex-grow p-4 md:p-6 overflow-hidden bg-slate-50/50">
-                <div className="w-full h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
+            <main className="flex-grow p-3 sm:p-4 md:p-6 overflow-y-auto bg-slate-50/50">
+                <div className="w-full h-full flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-6">
 
                     {/* Left: AI Avatar & Visualization */}
-                    <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[300px]">
-                        <Card className="flex-grow bg-black rounded-3xl border-0 shadow-2xl relative flex flex-col items-center justify-center p-0 overflow-hidden group ring-1 ring-white/10">
+                    <div className="w-full lg:w-1/2 flex flex-col gap-3 sm:gap-4 h-auto lg:h-full min-h-[250px] sm:min-h-[300px] flex-shrink-0 lg:flex-shrink">
+                        <Card className="flex-grow bg-black rounded-2xl sm:rounded-3xl border-0 shadow-2xl relative flex flex-col items-center justify-center p-0 overflow-hidden group ring-1 ring-white/10 min-h-[250px] sm:min-h-[300px]">
                             {/* Header Status */}
                             <div className="absolute top-6 left-0 right-0 flex justify-center z-20">
                                 <Badge variant="outline" className={cn(
@@ -1013,7 +1019,7 @@ const InterviewCoach = () => {
                                     ref={canvasRef}
                                     width={500}
                                     height={500}
-                                    className="w-full h-full object-contain"
+                                    className="w-full h-full object-contain max-h-[250px] sm:max-h-[300px] lg:max-h-none"
                                 />
                             </div>
 
@@ -1043,14 +1049,14 @@ const InterviewCoach = () => {
                             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900/50 via-black to-black pointer-events-none" />
                         </Card>
 
-                        {/* Coach Tip - Smaller and integrated */}
-                        <div className="bg-white border border-slate-200/60 shadow-sm rounded-xl p-4 flex gap-3 items-start">
-                            <div className="bg-blue-50 p-2 rounded-lg text-blue-600 shrink-0">
-                                <Sparkles className="h-4 w-4" />
+                        {/* Coach Tip - Desktop only */}
+                        <div className="hidden sm:flex bg-white border border-slate-200/60 shadow-sm rounded-lg sm:rounded-xl p-3 sm:p-4 flex gap-2 sm:gap-3 items-start">
+                            <div className="bg-blue-50 p-1.5 sm:p-2 rounded-lg text-blue-600 shrink-0">
+                                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </div>
-                            <div>
-                                <h4 className="font-bold text-xs text-slate-900 mb-0.5 uppercase tracking-wide">Pro Tip</h4>
-                                <p className="text-sm text-slate-600 leading-snug">
+                            <div className="min-w-0">
+                                <h4 className="font-bold text-[10px] sm:text-xs text-slate-900 mb-0.5 uppercase tracking-wide">Pro Tip</h4>
+                                <p className="text-xs sm:text-sm text-slate-600 leading-snug">
                                     Use the STAR method (Situation, Task, Action, Result) to structure your answers effectively.
                                 </p>
                             </div>
@@ -1058,25 +1064,25 @@ const InterviewCoach = () => {
                     </div>
 
                     {/* Right: Question & Input */}
-                    <div className="w-full lg:w-1/2 flex flex-col gap-4 h-full min-h-[400px]">
+                    <div className="w-full lg:w-1/2 flex flex-col gap-3 sm:gap-4 h-auto lg:h-full min-h-0 flex-shrink-0 lg:flex-shrink">
 
                         {/* Question Card */}
-                        <Card className="p-0 border-0 shadow-xl shadow-slate-200/60 rounded-[2rem] flex flex-col h-[320px] shrink-0 relative overflow-hidden bg-white group ring-1 ring-slate-100">
+                        <Card className="p-0 border-0 shadow-xl shadow-slate-200/60 rounded-xl sm:rounded-2xl flex flex-col h-[280px] sm:h-[320px] shrink-0 relative overflow-hidden bg-white group ring-1 ring-slate-100">
                             {/* Decorative Top Bar */}
-                            <div className="h-1.5 w-full bg-gradient-to-r from-primary/80 via-primary to-primary/80" />
+                            <div className="h-1 sm:h-1.5 w-full bg-gradient-to-r from-primary/80 via-primary to-primary/80" />
 
-                            <div className="p-8 flex flex-col h-full relative z-10">
+                            <div className="p-4 sm:p-6 lg:p-8 flex flex-col h-full relative z-10">
                                 {/* Header Row: Number & Badges */}
-                                <div className="flex items-center justify-between mb-6 flex-shrink-0">
-                                    <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                                <div className="flex items-center justify-between mb-4 sm:mb-6 flex-shrink-0 gap-2">
+                                    <span className="text-[10px] sm:text-xs font-bold tracking-widest text-slate-400 uppercase whitespace-nowrap">
                                         Question {currentQuestionIndex + 1} <span className="text-slate-300 font-normal">/ {interviewData?.questions.length}</span>
                                     </span>
-                                    <div className="flex gap-2">
-                                        <Badge variant="secondary" className="bg-primary/5 text-primary hover:bg-primary/10 border-0 px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                                    <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
+                                        <Badge variant="secondary" className="bg-primary/5 text-primary hover:bg-primary/10 border-0 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold tracking-wide uppercase">
                                             {currentQuestion?.category}
                                         </Badge>
                                         <Badge variant="outline" className={cn(
-                                            "text-xs capitalize px-3 py-1 border font-medium",
+                                            "text-[10px] sm:text-xs capitalize px-2 sm:px-3 py-0.5 sm:py-1 border font-medium",
                                             currentQuestion?.difficulty === 'easy' ? "border-green-200 text-green-700 bg-green-50" :
                                                 currentQuestion?.difficulty === 'medium' ? "border-amber-200 text-amber-700 bg-amber-50" :
                                                     "border-red-200 text-red-700 bg-red-50"
@@ -1088,16 +1094,16 @@ const InterviewCoach = () => {
 
                                 {/* Question Text Area - Scrollable Fix */}
                                 <div className="flex-grow relative min-h-0">
-                                    <div className="absolute inset-0 overflow-y-auto pr-2 custom-scrollbar">
+                                    <div ref={questionScrollRef} className="absolute inset-0 overflow-y-auto pr-2 custom-scrollbar">
                                         {/* Quote Icon Watermark - Fixed position relative to content */}
                                         <div className="absolute -top-2 -left-2 text-slate-100 text-8xl font-serif leading-none select-none pointer-events-none transform -translate-y-4 -z-10">
                                             <Quote className="h-20 w-20 text-slate-50 fill-current opacity-50" />
                                         </div>
 
-                                        <h2 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug tracking-tight relative z-10">
+                                        <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-slate-900 leading-snug tracking-tight relative z-10">
                                             {displayedQuestion}
                                             {isTyping && (
-                                                <span className="inline-block w-3 h-8 ml-1.5 align-sub bg-primary animate-pulse rounded-sm" />
+                                                <span className="inline-block w-2 sm:w-3 h-6 sm:h-8 ml-1 sm:ml-1.5 align-sub bg-primary animate-pulse rounded-sm" />
                                             )}
                                         </h2>
                                     </div>
@@ -1110,42 +1116,45 @@ const InterviewCoach = () => {
 
                         {/* Answer Input Area */}
                         <Card className={cn(
-                            "flex-grow flex flex-col shadow-lg shadow-slate-200/40 border-0 rounded-3xl relative overflow-hidden bg-white transition-all duration-300 ring-1 ring-slate-200",
+                            "flex-grow flex flex-col shadow-lg shadow-slate-200/40 border-0 rounded-xl sm:rounded-2xl lg:rounded-3xl relative overflow-hidden bg-white transition-all duration-300 ring-1 ring-slate-200 min-h-[300px] sm:min-h-[350px] lg:min-h-[180px] lg:h-auto lg:max-h-[260px] lg:flex-shrink-0",
                             isListening ? "ring-2 ring-purple-500/50 shadow-purple-100" : "focus-within:ring-2 focus-within:ring-primary/20"
                         )}>
-                            <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 backdrop-blur-sm">
-                                <div className="flex items-center gap-2 px-2">
-                                    {inputMode === 'voice' ? <Mic className="h-4 w-4 text-primary" /> : <Keyboard className="h-4 w-4 text-primary" />}
-                                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            <div className="p-2 sm:p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 backdrop-blur-sm gap-2">
+                                <div className="flex items-center gap-1.5 sm:gap-2 px-1 sm:px-2 min-w-0">
+                                    {inputMode === 'voice' ? <Mic className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" /> : <Keyboard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" />}
+                                    <span className="text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider truncate">
                                         {inputMode === 'voice' ? 'Voice Input' : 'Text Input'}
+                                    </span>
+                                    <span className="text-[10px] sm:text-xs text-slate-400 font-medium ml-2 sm:ml-3">
+                                        {currentAnswer.length} chars
                                     </span>
                                 </div>
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={toggleInputMode}
-                                    className="h-7 text-xs font-medium text-slate-500 hover:text-primary hover:bg-white px-3"
+                                    className="h-6 sm:h-7 text-[10px] sm:text-xs font-medium text-slate-500 hover:text-primary hover:bg-white px-2 sm:px-3 flex-shrink-0"
                                 >
-                                    Switch to {inputMode === 'voice' ? 'Text' : 'Voice'}
+                                    <span className="hidden sm:inline">Switch to </span>{inputMode === 'voice' ? 'Text' : 'Voice'}
                                 </Button>
                             </div>
 
-                            <div className="relative flex-grow">
+                            <div className="relative flex-grow min-h-0 overflow-hidden lg:overflow-y-auto">
                                 <Textarea
                                     value={currentAnswer}
                                     onChange={(e) => setCurrentAnswer(e.target.value)}
                                     placeholder={inputMode === 'voice' ? "Listening... Speak your answer clearly." : "Type your answer here..."}
-                                    className="h-full resize-none border-0 focus-visible:ring-0 text-lg p-6 leading-relaxed bg-transparent text-slate-800 placeholder:text-slate-300 font-medium"
+                                    className="h-full resize-none border-0 focus-visible:ring-0 text-sm sm:text-base lg:text-sm p-4 sm:p-5 lg:p-3.5 leading-relaxed bg-transparent text-slate-800 placeholder:text-slate-300 font-medium"
                                     disabled={isSubmitting}
                                 />
 
                                 {inputMode === 'voice' && (
-                                    <div className="absolute bottom-6 right-6">
+                                    <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6">
                                         <Button
                                             size="icon"
                                             variant={isListening ? "destructive" : "default"}
                                             className={cn(
-                                                "relative rounded-full h-14 w-14 shadow-xl transition-all duration-500 border border-slate-100",
+                                                "relative rounded-full h-12 w-12 sm:h-14 sm:w-14 shadow-xl transition-all duration-500 border border-slate-100",
                                                 isListening
                                                     ? "bg-red-500 hover:bg-red-600 text-white shadow-red-500/30 ring-4 ring-red-500/20"
                                                     : "bg-slate-900 hover:bg-slate-800 text-white"
@@ -1153,9 +1162,9 @@ const InterviewCoach = () => {
                                             onClick={toggleListening}
                                         >
                                             {isListening ? (
-                                                <MicOff className="h-6 w-6" />
+                                                <MicOff className="h-5 w-5 sm:h-6 sm:w-6" />
                                             ) : (
-                                                <Mic className="h-6 w-6" />
+                                                <Mic className="h-5 w-5 sm:h-6 sm:w-6" />
                                             )}
                                         </Button>
                                     </div>
@@ -1163,30 +1172,28 @@ const InterviewCoach = () => {
                             </div>
 
                             {/* Improved Footer with Breathing Room */}
-                            <div className="p-6 bg-white border-t border-slate-100 flex justify-between items-center backdrop-blur-md">
-                                <div className="text-xs text-slate-400 font-medium pl-1">
-                                    {currentAnswer.length} chars
-                                </div>
-                                <div className="flex gap-3">
+                            <div className="p-3 sm:p-4 lg:p-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 sm:gap-0 backdrop-blur-md">
+                                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                                     <Button
                                         variant="ghost"
                                         onClick={handleSkip}
                                         disabled={isSubmitting}
-                                        className="text-slate-500 hover:text-slate-900 gap-2 h-11"
+                                        className="text-slate-500 hover:text-slate-900 gap-1.5 sm:gap-2 h-12 sm:h-11 flex-1 sm:flex-none text-sm sm:text-sm rounded-lg sm:rounded-xl border border-slate-200 bg-white hover:bg-slate-50"
                                     >
-                                        <SkipForward className="h-4 w-4" /> Skip
+                                        <SkipForward className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Skip</span>
                                     </Button>
                                     <Button
                                         onClick={handleSubmitAnswer}
                                         disabled={!currentAnswer.trim() || isSubmitting}
-                                        className="px-8 h-11 shadow-lg shadow-primary/20 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90"
+                                        className="px-4 sm:px-6 lg:px-8 h-12 sm:h-11 shadow-lg shadow-primary/20 rounded-lg sm:rounded-xl font-bold text-sm sm:text-sm transition-all hover:scale-105 active:scale-95 bg-primary hover:bg-primary/90 flex-1 sm:flex-none"
                                     >
                                         {isSubmitting ? (
-                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin mr-1.5 sm:mr-2" />
                                         ) : (
                                             <>
-                                                {isLastQuestion ? 'Complete Interview' : 'Submit & Next'}
-                                                {isLastQuestion ? <CheckCircle2 className="ml-2 h-4 w-4" /> : <ArrowRight className="ml-2 h-4 w-4" />}
+                                                <span className="hidden sm:inline">{isLastQuestion ? 'Complete Interview' : 'Submit & Next'}</span>
+                                                <span className="sm:hidden">{isLastQuestion ? 'Complete' : 'Submit'}</span>
+                                                {isLastQuestion ? <CheckCircle2 className="ml-1.5 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <ArrowRight className="ml-1.5 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                                             </>
                                         )}
                                     </Button>

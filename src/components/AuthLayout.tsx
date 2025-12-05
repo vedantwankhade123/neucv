@@ -13,7 +13,7 @@ interface AuthLayoutProps {
     illustration?: string;
 }
 
-export const AuthLayout = ({ children, image, title, subtitle, illustration }: AuthLayoutProps) => {
+export const AuthLayout = ({ children }: AuthLayoutProps) => {
     return (
         <div className="container relative h-screen flex-col grid lg:max-w-none lg:grid-cols-2 lg:px-0">
             <div className="relative hidden h-[calc(100vh-2rem)] m-4 flex-col p-10 text-white lg:flex overflow-hidden rounded-3xl border border-zinc-200 shadow-sm">
@@ -22,14 +22,44 @@ export const AuthLayout = ({ children, image, title, subtitle, illustration }: A
                 <motion.div
                     className="absolute inset-0 z-0"
                     style={{
-                        background: "linear-gradient(-45deg, #000000, #020617, #0f172a, #020617)",
-                        backgroundSize: "400% 400%"
+                        background: "linear-gradient(135deg, #0b0b0f 0%, #0f172a 14%, #111111 28%, #f97316 52%, #ff9a3c 66%, #111111 82%, #0b0b0f 100%)",
+                        backgroundSize: "340% 340%"
                     }}
                     animate={{
                         backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"]
                     }}
                     transition={{
-                        duration: 15,
+                        duration: 14,
+                        ease: "easeInOut",
+                        repeat: Infinity
+                    }}
+                />
+                <motion.div
+                    className="absolute inset-0 z-0"
+                    style={{
+                        background: "radial-gradient(circle at 25% 30%, rgba(255, 164, 94, 0.28), transparent 40%), radial-gradient(circle at 75% 70%, rgba(255, 255, 255, 0.16), transparent 46%)",
+                        mixBlendMode: "screen"
+                    }}
+                    animate={{
+                        opacity: [0.85, 1, 0.85],
+                        scale: [1, 1.025, 1]
+                    }}
+                    transition={{
+                        duration: 9,
+                        ease: "easeInOut",
+                        repeat: Infinity
+                    }}
+                />
+                <motion.div
+                    className="absolute inset-0 z-0"
+                    style={{
+                        background: "linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.22) 45%, transparent 90%)"
+                    }}
+                    animate={{
+                        backgroundPosition: ["-120% 0%", "120% 0%"]
+                    }}
+                    transition={{
+                        duration: 6,
                         ease: "easeInOut",
                         repeat: Infinity
                     }}
@@ -57,35 +87,34 @@ export const AuthLayout = ({ children, image, title, subtitle, illustration }: A
                     />
                 </div>
 
-                {/* Illustration - Takes available space */}
-                <div className="relative z-20 flex-1 flex items-center justify-center w-full">
-                    {illustration && (
-                        <motion.div
-                            className="relative w-full flex justify-center items-center"
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                        >
-                            <img
-                                src={illustration}
-                                alt="Authentication Illustration"
-                                className="object-contain max-h-[75vh] w-auto drop-shadow-md"
-                            />
-                        </motion.div>
-                    )}
-                </div>
-
-                {/* Text Content - Bottom Aligned */}
-                <div className="relative z-20 mt-auto space-y-2 text-white">
+                {/* Text Content - Centered hero copy */}
+                <div className="relative z-20 flex-1 w-full flex items-center">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.5, duration: 0.8 }}
+                        className="space-y-4 max-w-xl"
                     >
-                        <h1 className="text-3xl font-bold tracking-tight">Build your professional resume in minutes.</h1>
-                        <p className="text-lg text-white/80">
-                            Join thousands of users who have landed their dream jobs with our AI-powered resume builder.
+                        <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/80 ring-1 ring-white/15">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            New user welcome
+                        </div>
+                        <h1 className="text-3xl lg:text-4xl font-bold leading-tight tracking-tight text-white">
+                            Build your professional resume and prep for interviews—faster.
+                        </h1>
+                        <p className="text-lg text-white/80 leading-relaxed">
+                            AI-powered resumes, tailored interview practice, and credits to get you started. Stay focused on landing the offer—let us handle the polish.
                         </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-white/80">
+                            <div className="rounded-2xl bg-white/5 p-3 ring-1 ring-white/10 backdrop-blur">
+                                <p className="font-semibold text-white">Smart interview coach</p>
+                                <p className="text-white/70">Adaptive Q&A with instant feedback.</p>
+                            </div>
+                            <div className="rounded-2xl bg-white/5 p-3 ring-1 ring-white/10 backdrop-blur">
+                                <p className="font-semibold text-white">Polished resumes</p>
+                                <p className="text-white/70">ATS-friendly templates and quick edits.</p>
+                            </div>
+                        </div>
                     </motion.div>
                 </div>
             </div>

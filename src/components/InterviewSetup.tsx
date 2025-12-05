@@ -31,8 +31,13 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
 
     useEffect(() => {
         const settings = getAutoSaveSettings();
-        if (settings.defaultLanguage) {
+        // Validate and set language - always default to 'english' if invalid or not set
+        const validLanguages: InterviewLanguage[] = ['english', 'hinglish', 'marathi', 'hindi'];
+        if (settings.defaultLanguage && validLanguages.includes(settings.defaultLanguage as InterviewLanguage)) {
             setLanguage(settings.defaultLanguage as InterviewLanguage);
+        } else {
+            // Ensure it's always 'english' if invalid or not set
+            setLanguage('english');
         }
         if (settings.silenceDuration) {
             setSilenceDuration(settings.silenceDuration);
@@ -123,13 +128,17 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
 
         const finalResumeText = resumeText.trim() || `Resume file: ${resumeFile.name}. Text extraction was not possible or yielded empty results.`;
 
+        // Ensure language is always 'english' if not set or invalid
+        const validLanguages: InterviewLanguage[] = ['english', 'hinglish', 'marathi', 'hindi'];
+        const finalLanguage: InterviewLanguage = validLanguages.includes(language) ? language : 'english';
+
         onComplete({
             resumeFile,
             resumeText: finalResumeText,
             jobRole: jobRole.trim(),
             duration,
             numQuestions,
-            language,
+            language: finalLanguage,
             silenceDuration
         });
     };
@@ -199,9 +208,22 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                             />
                             <label htmlFor="resume-upload" className="cursor-pointer">
                                 {isProcessing ? (
-                                    <div className="flex flex-col items-center gap-2">
-                                        <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
-                                        <p className="text-xs text-muted-foreground">Processing file...</p>
+                                    <div className="flex flex-col items-center gap-4 py-2">
+                                        <div className="relative">
+                                            <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+                                            <div className="relative rounded-full bg-primary/10 p-4">
+                                                <FileText className="h-8 w-8 text-primary animate-pulse" />
+                                            </div>
+                                        </div>
+                                        <div className="text-center space-y-1">
+                                            <p className="text-sm font-semibold text-foreground">Processing Resume</p>
+                                            <p className="text-xs text-muted-foreground">Analyzing your file...</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+                                            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+                                            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+                                        </div>
                                     </div>
                                 ) : resumeFile ? (
                                     <div className="flex flex-col items-center gap-2">
@@ -229,15 +251,6 @@ export function InterviewSetup({ onComplete, onCancel }: InterviewSetupProps) {
                             </label>
                         </div>
 
-                        {resumeText && (
-                            <div className="p-3 bg-muted rounded-lg">
-                                <div className="flex items-center gap-2 mb-1.5">
-                                    <FileText className="h-3 w-3 text-muted-foreground" />
-                                    <span className="text-xs font-medium">Extracted Text Preview</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground line-clamp-2">{resumeText}</p>
-                            </div>
-                        )}
                         {!resumeText && resumeFile && !isProcessing && (
                             <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
                                 <div className="flex items-center gap-2 mb-1.5">
