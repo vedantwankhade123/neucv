@@ -10,30 +10,14 @@ import { Loader2, Share2, Heart } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Card } from '@/components/ui/card';
 import { UserNav } from '@/components/UserNav';
-import { getUserProfile, deductCredits } from '@/lib/user-service';
-import { InsufficientCreditsDialog } from '@/components/InsufficientCreditsDialog';
+import { getUserProfile } from '@/lib/user-service';
 
 const InterviewSetupPage = () => {
     const navigate = useNavigate();
     const [user] = useAuthState(auth);
     const { toast } = useToast();
     const [isGenerating, setIsGenerating] = useState(false);
-    const [showCreditsDialog, setShowCreditsDialog] = useState(false);
-    const [userCredits, setUserCredits] = useState<number | null>(null);
-    const [nextResetDate, setNextResetDate] = useState<string>('');
 
-    const REQUIRED_CREDITS = 5;
-
-    useEffect(() => {
-        if (user) {
-            getUserProfile(user).then(profile => {
-                setUserCredits(profile.credits);
-                const lastReset = profile.lastCreditReset || profile.createdAt;
-                const nextReset = new Date(lastReset + (30 * 24 * 60 * 60 * 1000));
-                setNextResetDate(nextReset.toLocaleDateString());
-            });
-        }
-    }, [user]);
 
     const checkCreditsAndStart = async (setupData: InterviewSetupData) => {
         if (!user) {
@@ -45,35 +29,26 @@ const InterviewSetupPage = () => {
             return;
         }
 
-        // Check if user has personal API key enabled
-        const profile = await getUserProfile(user);
-        const hasPersonalApiKey = profile.usePersonalApiKey && !!localStorage.getItem('gemini_api_key');
+        // Check if user has API key enabled
+        const apiKey = localStorage.getItem('gemini_api_key');
 
-        // If using personal API key, skip credit check
-        if (hasPersonalApiKey) {
-            await startInterview(setupData);
-            return;
-        }
-
-        // Check credits
-        if (profile.credits < REQUIRED_CREDITS) {
-            setShowCreditsDialog(true);
-            return;
-        }
-
-        // Deduct credits immediately when starting the interview
-        const didDeduct = await deductCredits(user.uid, REQUIRED_CREDITS);
-        if (!didDeduct) {
+        if (!apiKey) {
             toast({
-                title: 'Unable to Deduct Credits',
-                description: 'Please try again or check your balance.',
-                variant: 'destructive'
+                title: "API Key Missing",
+                description: "Please add your Gemini API key in Settings.",
+                variant: "destructive",
+                action: (
+                    <button
+                        onClick={() => navigate('/settings')}
+                        className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    >
+                        Go to Settings
+                    </button>
+                )
             });
             return;
         }
-        setUserCredits((prev) => (prev !== null ? prev - REQUIRED_CREDITS : prev));
 
-        // Credits deducted, start interview
         await startInterview(setupData);
     };
 
@@ -153,30 +128,6 @@ const InterviewSetupPage = () => {
                             >
                                 <Share2 className="h-4 w-4" />
                             </button>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
-                                        <Heart className="h-4 w-4 text-red-500" />
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80" align="end">
-                                    <div className="space-y-4">
-                                        <div>
-                                            <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
-                                            <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
-                                        </div>
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="bg-white p-3 rounded-lg border">
-                                                <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
-                                            </div>
-                                            <div className="text-center space-y-1">
-                                                <p className="font-semibold text-sm">Vedant Wankhade</p>
-                                                <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
                             <UserNav />
                         </div>
                     </div>
@@ -219,30 +170,6 @@ const InterviewSetupPage = () => {
                         >
                             <Share2 className="h-4 w-4" />
                         </button>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
-                                    <Heart className="h-4 w-4 text-red-500" />
-                                </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80" align="end">
-                                <div className="space-y-4">
-                                    <div>
-                                        <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
-                                        <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className="bg-white p-3 rounded-lg border">
-                                            <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
-                                        </div>
-                                        <div className="text-center space-y-1">
-                                            <p className="font-semibold text-sm">Vedant Wankhade</p>
-                                            <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
                         <UserNav />
                     </div>
                 </div>
@@ -262,13 +189,7 @@ const InterviewSetupPage = () => {
                 />
             </main>
 
-            <InsufficientCreditsDialog
-                open={showCreditsDialog}
-                onOpenChange={setShowCreditsDialog}
-                currentCredits={userCredits || 0}
-                requiredCredits={REQUIRED_CREDITS}
-                nextResetDate={nextResetDate}
-            />
+
         </div>
     );
 };

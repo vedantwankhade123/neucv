@@ -34,14 +34,11 @@ import { auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { deleteUser } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
-import { getUserProfile, addCredits, togglePersonalApiKeyPreference, deleteUserAccount } from '@/lib/user-service';
-import { Sparkles, CreditCard } from 'lucide-react';
+import { getUserProfile, deleteUserAccount } from '@/lib/user-service';
+import { Sparkles } from 'lucide-react';
 import { getAutoSaveSettings, updateInterviewSettings } from '@/lib/settings';
-import { Key, QrCode } from 'lucide-react';
+import { Key } from 'lucide-react';
 import { Input } from "@/components/ui/input";
-import { CreditHistoryDialog } from '@/components/CreditHistoryDialog';
-import { CreditRulesDialog } from '@/components/CreditRulesDialog';
-import { CreditTransaction } from '@/types/user';
 
 const Settings = () => {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -73,13 +70,6 @@ const Settings = () => {
 
   const [apiKey, setApiKey] = useState('');
   const [isApiKeySaved, setIsApiKeySaved] = useState(false);
-  // Initialize from localStorage to prevent flickering
-  const [usePersonalKey, setUsePersonalKey] = useState(() => {
-    return localStorage.getItem('always_use_personal_key') === 'true';
-  });
-  const [credits, setCredits] = useState<number | null>(null);
-  const [nextResetDate, setNextResetDate] = useState<string>('');
-  const [creditHistory, setCreditHistory] = useState<CreditTransaction[]>([]);
 
   const handleSaveApiKey = () => {
     if (!apiKey.trim()) return;
@@ -107,50 +97,9 @@ const Settings = () => {
   const userName = user?.displayName || 'Open User';
   const userEmail = user?.email || 'No email';
 
-  useEffect(() => {
-    if (user) {
-      getUserProfile(user).then(profile => {
-        setCredits(profile.credits);
 
-        // If profile has a preference, use it and sync local storage
-        if (profile.usePersonalApiKey !== undefined) {
-          setUsePersonalKey(profile.usePersonalApiKey);
-          localStorage.setItem('always_use_personal_key', String(profile.usePersonalApiKey));
-        }
 
-        // Calculate next reset date
-        const lastReset = profile.lastCreditReset || profile.createdAt;
-        const nextReset = new Date(lastReset + (30 * 24 * 60 * 60 * 1000));
-        setNextResetDate(nextReset.toLocaleDateString());
 
-        // Set history
-        setCreditHistory(profile.creditHistory || []);
-      });
-    }
-  }, [user]);
-
-  const handleTogglePersonalKey = async (checked: boolean) => {
-    if (!user) return;
-    setUsePersonalKey(checked);
-    localStorage.setItem('always_use_personal_key', String(checked));
-    await togglePersonalApiKeyPreference(user.uid, checked);
-    if (checked) {
-      showSuccess("Now prioritizing your personal API key.");
-    } else {
-      showSuccess("Now using free credits first.");
-    }
-  };
-
-  const handleBuyCredits = async (amount: number, cost: string) => {
-    if (!user) return;
-    showSuccess(`Processing payment of ${cost}...`);
-    // Simulate payment delay
-    setTimeout(async () => {
-      await addCredits(user.uid, amount);
-      setCredits(prev => (prev || 0) + amount);
-      showSuccess(`Successfully purchased ${amount} credits!`);
-    }, 1500);
-  };
 
   const handleDeleteAll = () => {
     try {
@@ -275,30 +224,7 @@ const Settings = () => {
             >
               <Share2 className="h-4 w-4" />
             </Button>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <Heart className="h-4 w-4 text-red-500" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-sm mb-1">Support the Project</h4>
-                    <p className="text-xs text-muted-foreground">Your contributions help keep this project free!</p>
-                  </div>
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="bg-white p-3 rounded-lg border">
-                      <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-32 h-32 object-contain" />
-                    </div>
-                    <div className="text-center space-y-1">
-                      <p className="font-semibold text-sm">Vedant Wankhade</p>
-                      <p className="text-xs text-muted-foreground">UPI: 9175988560@kotak811</p>
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+
             <UserNav />
           </div>
         </div>
@@ -333,68 +259,7 @@ const Settings = () => {
             </Card>
           </div>
 
-          {/* Credits & Usage Section */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-medium text-muted-foreground ml-1">Credits & Usage</h2>
-            <Card className={cardClasses}>
-              <CardContent className="p-6">
-                <div className="flex flex-col gap-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-amber-100 dark:bg-amber-900/20 rounded-full">
-                        <Zap className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold">Monthly Free Credits</h3>
-                        <p className="text-sm text-muted-foreground">Resets on {nextResetDate}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-primary">{credits !== null ? credits : '-'}</div>
-                      <p className="text-xs text-muted-foreground">credits remaining</p>
-                      <div className="mt-2">
-                        <CreditHistoryDialog transactions={creditHistory} />
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div className="p-4 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between h-full">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <FileText className="h-4 w-4 text-blue-400" />
-                          <span className="font-semibold text-base">Resume AI Task</span>
-                        </div>
-                        <div className="text-slate-400 text-xs">Generates summaries, skills, and improvements.</div>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between">
-                        <span className="font-bold text-lg">1 Credit</span>
-                        <CreditRulesDialog mode="resume" trigger={
-                          <Button variant="secondary" size="sm" className="h-7 text-xs">View Details</Button>
-                        } />
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between h-full">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <MessageCircle className="h-4 w-4 text-purple-400" />
-                          <span className="font-semibold text-base">Interview Session</span>
-                        </div>
-                        <div className="text-slate-400 text-xs">Complete interview practice with AI feedback.</div>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between">
-                        <span className="font-bold text-lg">5 Credits</span>
-                        <CreditRulesDialog mode="interview" trigger={
-                          <Button variant="secondary" size="sm" className="h-7 text-xs">View Details</Button>
-                        } />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
           {/* AI Configuration Section */}
           <div className="space-y-4">
@@ -409,19 +274,9 @@ const Settings = () => {
                       </div>
                       Google Gemini API Key
                     </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="use-personal-key" className="text-sm font-medium cursor-pointer">
-                        Use Key
-                      </Label>
-                      <Switch
-                        id="use-personal-key"
-                        checked={usePersonalKey}
-                        onCheckedChange={handleTogglePersonalKey}
-                      />
-                    </div>
                   </div>
                   <CardDescription className="text-sm">
-                    Add your own API key to unlock unlimited usage or when you run out of credits
+                    Add your own API key to unlock unlimited usage.
                   </CardDescription>
                 </div>
               </CardHeader>
@@ -638,35 +493,7 @@ const Settings = () => {
 
 
 
-          {/* Contribute Section */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-medium text-muted-foreground ml-1">Support Development</h2>
-            <Card className={cardClasses}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-red-500" />
-                  Contribute
-                </CardTitle>
-                <CardDescription>
-                  This project is free and open source. If you find it useful, consider supporting the developer.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col md:flex-row gap-6 items-center">
-                <div className="bg-white p-4 rounded-xl border shadow-sm">
-                  <img src="/QR CODE.jpg" alt="UPI QR Code" className="w-48 h-48 object-contain rounded-lg border-2 border-slate-100" />
-                </div>
-                <div className="space-y-4 text-center md:text-left">
-                  <div>
-                    <h4 className="font-semibold">Vedant Wankhade</h4>
-                    <p className="text-sm text-muted-foreground">UPI ID: 9175988560@kotak811</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground max-w-md">
-                    Your contributions help cover server costs and keep the project alive. Thank you!
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+
 
           {/* Auto-Save Preferences Section */}
           <div className="space-y-4">

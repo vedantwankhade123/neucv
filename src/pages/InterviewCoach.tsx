@@ -737,24 +737,19 @@ const InterviewCoach = () => {
             // Check credits and resolve API key
             let apiKey: string | undefined = undefined;
             if (user) {
-                const profile = await getUserProfile(user);
-                const shouldUsePersonalKey = profile.usePersonalApiKey;
+                // Prioritize user key if it exists, otherwise fall back to platform key
+                apiKey = localStorage.getItem('gemini_api_key');
 
-                if (shouldUsePersonalKey) {
-                    apiKey = localStorage.getItem('gemini_api_key') || undefined;
-                    if (!apiKey) {
-                        toast.error("API Key Missing", {
-                            description: "Please add your Gemini API key in Settings.",
-                            action: {
-                                label: "Settings",
-                                onClick: () => navigate('/settings')
-                            }
-                        });
-                        setIsGeneratingReport(false);
-                        return;
-                    }
-                } else {
-                    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+                if (!apiKey) {
+                    toast.error("API Key Missing", {
+                        description: "Please add your Gemini API key in Settings.",
+                        action: {
+                            label: "Settings",
+                            onClick: () => navigate('/settings')
+                        }
+                    });
+                    setIsGeneratingReport(false);
+                    return;
                 }
             }
 

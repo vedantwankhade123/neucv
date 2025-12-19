@@ -2,24 +2,15 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Helper to check if we should use personal key
 export const shouldForcePersonalKey = () => {
-  // This will be checked against user profile in the components
-  return localStorage.getItem('always_use_personal_key') === 'true';
+  return true; // Always prioritize if available
 };
 
 const getApiKey = (forcePersonal: boolean = false) => {
   const customKey = localStorage.getItem('gemini_api_key');
+  if (customKey) return customKey;
 
-  // If forcing personal key or if user has set preference
-  if (forcePersonal || shouldForcePersonalKey()) {
-    if (customKey) return customKey;
-    // If forced but no key, throw error
-    throw new Error('No personal API key found. Please add your Gemini API key in Settings.');
-  }
-
-  // Default platform key
-  const defaultKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-  return defaultKey || customKey || '';
+  // Platform key fallback removed. User must provide key.
+  return customKey || '';
 };
 
 // Initialize with a placeholder, actual key will be fetched dynamically

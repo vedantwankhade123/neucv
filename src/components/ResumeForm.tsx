@@ -29,7 +29,7 @@ import { auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { SummaryGenerationDialog, SummaryGenerationData } from './SummaryGenerationDialog';
 import { SkillsGenerationDialog } from './SkillsGenerationDialog';
-import { getUserProfile, deductCredits } from '@/lib/user-service';
+import { getUserProfile } from '@/lib/user-service';
 
 
 interface ResumeFormProps {
@@ -117,48 +117,28 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     setIsSummaryDialogOpen(false);
     try {
       // Check credits and resolve API key
+      // Check credits and resolve API key
       const profile = await getUserProfile(user);
-      const shouldUsePersonalKey = profile.usePersonalApiKey;
-      let apiKey = undefined;
 
-      if (shouldUsePersonalKey) {
-        apiKey = localStorage.getItem('gemini_api_key') || undefined;
-        if (!apiKey) {
-          toast({
-            title: "API Key Missing",
-            description: "Please add your Gemini API key in Settings.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          return;
-        }
-      } else {
-        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (profile.credits < 1) {
-          toast({
-            title: "Insufficient Credits",
-            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          return;
-        }
+      // FIX: Prioritize user key if it exists, otherwise fall back to platform key
+      let apiKey = localStorage.getItem('gemini_api_key');
+
+      if (!apiKey) {
+        toast({
+          title: "API Key Missing",
+          description: "Please add your Gemini API key in Settings.",
+          variant: "destructive",
+          action: (
+            <button
+              onClick={() => navigate('/settings')}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              Go to Settings
+            </button>
+          )
+        });
+        setIsGeneratingSummary(false);
+        return;
       }
 
       const summary = await generateResumeSummary(
@@ -172,13 +152,10 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
         apiKey
       );
 
-      // Deduct credit if successful and not using personal key
-      if (!shouldUsePersonalKey) {
-        await deductCredits(user.uid, 1);
-      }
+
 
       setResumeData(prev => ({ ...prev, summary }));
-      toast({ title: "Summary Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
+      toast({ title: "Summary Generated", description: "Generated successfully." });
     } catch (error: any) {
       console.error("Error generating summary:", error);
       const errorMessage = error?.message || "Please check your API key.";
@@ -217,50 +194,29 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
 
     try {
       // Check credits and resolve API key
+      // Check credits and resolve API key
       const profile = await getUserProfile(user);
-      const shouldUsePersonalKey = profile.usePersonalApiKey;
-      let apiKey = undefined;
 
-      if (shouldUsePersonalKey) {
-        apiKey = localStorage.getItem('gemini_api_key') || undefined;
-        if (!apiKey) {
-          toast({
-            title: "API Key Missing",
-            description: "Please add your Gemini API key in Settings.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          setActiveExperienceIndex(null);
-          return;
-        }
-      } else {
-        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (profile.credits < 1) {
-          toast({
-            title: "Insufficient Credits",
-            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          setActiveExperienceIndex(null);
-          return;
-        }
+      // FIX: Prioritize user key if it exists, otherwise fall back to platform key
+      let apiKey = localStorage.getItem('gemini_api_key');
+
+      if (!apiKey) {
+        toast({
+          title: "API Key Missing",
+          description: "Please add your Gemini API key in Settings.",
+          variant: "destructive",
+          action: (
+            <button
+              onClick={() => navigate('/settings')}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              Go to Settings
+            </button>
+          )
+        });
+        setIsGeneratingSummary(false);
+        setActiveExperienceIndex(null);
+        return;
       }
 
       const description = await generateExperienceDescription(
@@ -274,19 +230,15 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
         apiKey
       );
 
-      // Deduct credit if successful and not using personal key
-      if (!shouldUsePersonalKey) {
-        await deductCredits(user.uid, 1);
-      }
+
 
       const newExperience = [...resumeData.experience];
-      // If there's existing content, append; otherwise replace
       if (exp.description && exp.description.length > 10) {
         newExperience[index] = { ...newExperience[index], description };
-        toast({ title: "Experience Enhanced", description: shouldUsePersonalKey ? "Enhanced using your API key." : "Enhanced successfully (1 credit used)." });
+        toast({ title: "Experience Enhanced", description: "Enhanced successfully." });
       } else {
         newExperience[index] = { ...newExperience[index], description };
-        toast({ title: "Experience Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
+        toast({ title: "Experience Generated", description: "Generated successfully." });
       }
 
       setResumeData(prev => ({ ...prev, experience: newExperience }));
@@ -359,59 +311,35 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     try {
       // Check credits and resolve API key
       const profile = await getUserProfile(user);
-      const shouldUsePersonalKey = profile.usePersonalApiKey;
-      let apiKey = undefined;
 
-      if (shouldUsePersonalKey) {
-        apiKey = localStorage.getItem('gemini_api_key') || undefined;
-        if (!apiKey) {
-          toast({
-            title: "API Key Missing",
-            description: "Please add your Gemini API key in Settings.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          return;
-        }
-      } else {
-        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (profile.credits < 1) {
-          toast({
-            title: "Insufficient Credits",
-            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          return;
-        }
+      // FIX: Prioritize user key if it exists, otherwise fall back to platform key
+      let apiKey = localStorage.getItem('gemini_api_key');
+
+      if (!apiKey) {
+        toast({
+          title: "API Key Missing",
+          description: "Please add your Gemini API key in Settings.",
+          variant: "destructive",
+          action: (
+            <button
+              onClick={() => navigate('/settings')}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              Go to Settings
+            </button>
+          )
+        });
+        setIsGeneratingSummary(false);
+        return;
       }
 
       const skillsString = await generateContextAwareSkills(resumeData, count, undefined, apiKey);
       const skills = skillsString.split(',').map(s => s.trim()).filter(s => s.length > 0);
 
-      // Deduct credit if successful and not using personal key
-      if (!shouldUsePersonalKey) {
-        await deductCredits(user.uid, 1);
-      }
+
 
       setResumeData(prev => ({ ...prev, skills }));
-      toast({ title: "Skills Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
+      toast({ title: "Skills Generated", description: "Generated successfully." });
     } catch (error: any) {
       console.error("Error generating skills:", error);
       const errorMessage = error?.message || "Please check your API key.";
@@ -502,49 +430,27 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     try {
       // Check credits and resolve API key
       const profile = await getUserProfile(user);
-      const shouldUsePersonalKey = profile.usePersonalApiKey;
-      let apiKey = undefined;
 
-      if (shouldUsePersonalKey) {
-        apiKey = localStorage.getItem('gemini_api_key') || undefined;
-        if (!apiKey) {
-          toast({
-            title: "API Key Missing",
-            description: "Please add your Gemini API key in Settings.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          setActiveCustomSectionIndex(null);
-          return;
-        }
-      } else {
-        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (profile.credits < 1) {
-          toast({
-            title: "Insufficient Credits",
-            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          setActiveCustomSectionIndex(null);
-          return;
-        }
+      // FIX: Prioritize user key if it exists, otherwise fall back to platform key
+      let apiKey = localStorage.getItem('gemini_api_key');
+
+      if (!apiKey) {
+        toast({
+          title: "API Key Missing",
+          description: "Please add your Gemini API key in Settings.",
+          variant: "destructive",
+          action: (
+            <button
+              onClick={() => navigate('/settings')}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              Go to Settings
+            </button>
+          )
+        });
+        setIsGeneratingSummary(false);
+        setActiveCustomSectionIndex(null);
+        return;
       }
 
       const keywords = section.organization || section.content || '';
@@ -557,10 +463,7 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
         apiKey
       );
 
-      // Deduct credit if successful and not using personal key
-      if (!shouldUsePersonalKey) {
-        await deductCredits(user.uid, 1);
-      }
+
 
       const newCustomSections = [...resumeData.customSections];
       if (section.type === 'text') {
@@ -584,7 +487,7 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
       }
 
       setResumeData(prev => ({ ...prev, customSections: newCustomSections }));
-      toast({ title: "Content Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
+      toast({ title: "Content Generated", description: "Generated successfully." });
     } catch (error: any) {
       console.error("Error generating custom section content:", error);
       const errorMessage = error?.message || "Please check your API key.";
@@ -617,49 +520,27 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
     try {
       // Check credits and resolve API key
       const profile = await getUserProfile(user);
-      const shouldUsePersonalKey = profile.usePersonalApiKey;
-      let apiKey = undefined;
 
-      if (shouldUsePersonalKey) {
-        apiKey = localStorage.getItem('gemini_api_key') || undefined;
-        if (!apiKey) {
-          toast({
-            title: "API Key Missing",
-            description: "Please add your Gemini API key in Settings.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          setActiveCustomItemIndex(null);
-          return;
-        }
-      } else {
-        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (profile.credits < 1) {
-          toast({
-            title: "Insufficient Credits",
-            description: "You have run out of free credits. Please add your own API key in Settings to continue.",
-            variant: "destructive",
-            action: (
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                Go to Settings
-              </button>
-            )
-          });
-          setIsGeneratingSummary(false);
-          setActiveCustomItemIndex(null);
-          return;
-        }
+      // FIX: Prioritize user key if it exists, otherwise fall back to platform key
+      let apiKey = localStorage.getItem('gemini_api_key');
+
+      if (!apiKey) {
+        toast({
+          title: "API Key Missing",
+          description: "Please add your Gemini API key in Settings.",
+          variant: "destructive",
+          action: (
+            <button
+              onClick={() => navigate('/settings')}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              Go to Settings
+            </button>
+          )
+        });
+        setIsGeneratingSummary(false);
+        setActiveCustomItemIndex(null);
+        return;
       }
 
       const keywords = item.title || item.subtitle || item.description || '';
@@ -672,10 +553,7 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
         apiKey
       );
 
-      // Deduct credit if successful and not using personal key
-      if (!shouldUsePersonalKey) {
-        await deductCredits(user.uid, 1);
-      }
+
 
       const newCustomSections = [...resumeData.customSections];
       const newItems = [...(section.items || [])];
@@ -683,7 +561,7 @@ const ResumeForm = ({ resumeData, setResumeData, resumeStyle, setResumeStyle, te
       newCustomSections[sectionIndex] = { ...section, items: newItems };
 
       setResumeData(prev => ({ ...prev, customSections: newCustomSections }));
-      toast({ title: "Description Generated", description: shouldUsePersonalKey ? "Generated using your API key." : "Generated successfully (1 credit used)." });
+      toast({ title: "Description Generated", description: "Generated successfully." });
     } catch (error: any) {
       console.error("Error generating item description:", error);
       const errorMessage = error?.message || "Please check your API key.";
